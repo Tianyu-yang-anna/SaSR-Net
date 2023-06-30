@@ -1,0 +1,1 @@
+~/anaconda3/bin/python net_grd_avst/main_avst.py --mode test --audio_dir "/data/feats/vggish" --video_res14x14_dir "/data/feats/r2plus1d_18/r2plus1d_18"
