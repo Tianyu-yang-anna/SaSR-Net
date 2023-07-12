@@ -217,11 +217,11 @@ def main():
     parser.add_argument(
         "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
     parser.add_argument(
-        '--batch-size', type=int, default=256, metavar='N', help='input batch size for training (default: 16)')
+        '--batch-size', type=int, default=64, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
         '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
-        '--lr', type=float, default=1e-4, metavar='LR', help='learning rate (default: 3e-4)')
+        '--lr', type=float, default=3e-4, metavar='LR', help='learning rate (default: 3e-4)')
     parser.add_argument(
         "--model", type=str, default='AVQA_Fusion_Net', help="with model to use")
     parser.add_argument(

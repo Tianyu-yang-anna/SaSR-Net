@@ -60,42 +60,42 @@ class AVQA_Fusion_Net(nn.Module):
         super(AVQA_Fusion_Net, self).__init__()
 
         # for features
-        self.fc_a1 =  nn.Linear(128, 256)
-        self.fc_a2=nn.Linear(256,256)
+        self.fc_a1 =  nn.Linear(128, 512)
+        self.fc_a2=nn.Linear(512,512)
 
-        self.fc_a1_pure =  nn.Linear(128, 256)
-        self.fc_a2_pure=nn.Linear(256,256)
-        self.visual_net = resnet18(pretrained=False)
+        self.fc_a1_pure =  nn.Linear(128, 512)
+        self.fc_a2_pure=nn.Linear(512,512)
+        self.visual_net = resnet18(pretrained=True)
 
-        self.fc_v = nn.Linear(2048, 256)
-        self.fc_st = nn.Linear(256, 256)
-        self.fc_fusion = nn.Linear(512, 256)
-        self.fc = nn.Linear(1024, 256)
-        self.fc_aq = nn.Linear(256, 256)
-        self.fc_vq = nn.Linear(256, 256)
+        self.fc_v = nn.Linear(2048, 512)
+        self.fc_st = nn.Linear(512, 512)
+        self.fc_fusion = nn.Linear(1024, 512)
+        self.fc = nn.Linear(1024, 512)
+        self.fc_aq = nn.Linear(512, 512)
+        self.fc_vq = nn.Linear(512, 512)
 
-        self.linear11 = nn.Linear(256, 256)
+        self.linear11 = nn.Linear(512, 512)
         self.dropout1 = nn.Dropout(0.1)
-        self.linear12 = nn.Linear(256, 256)
+        self.linear12 = nn.Linear(512, 512)
 
-        self.linear21 = nn.Linear(256, 256)
+        self.linear21 = nn.Linear(512, 512)
         self.dropout2 = nn.Dropout(0.1)
-        self.linear22 = nn.Linear(256, 256)
-        self.norm1 = nn.LayerNorm(256)
-        self.norm2 = nn.LayerNorm(256)
+        self.linear22 = nn.Linear(512, 512)
+        self.norm1 = nn.LayerNorm(512)
+        self.norm2 = nn.LayerNorm(512)
         self.dropout3 = nn.Dropout(0.1)
         self.dropout4 = nn.Dropout(0.1)
-        self.norm3 = nn.LayerNorm(256)
+        self.norm3 = nn.LayerNorm(512)
 
-        self.attn_a = nn.MultiheadAttention(256, 4, dropout=0.1)
-        self.attn_v = nn.MultiheadAttention(256, 4, dropout=0.1)
+        self.attn_a = nn.MultiheadAttention(512, 4, dropout=0.1)
+        self.attn_v = nn.MultiheadAttention(512, 4, dropout=0.1)
 
         # question
         self.question_encoder = QstEncoder(93, 512, 512, 1, 512)
 
         self.tanh = nn.Tanh()
         self.dropout = nn.Dropout(0.5)
-        self.fc_ans = nn.Linear(256, 42)
+        self.fc_ans = nn.Linear(512, 42)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         # self.fc_gl=nn.Linear(1024,512)
@@ -107,12 +107,12 @@ class AVQA_Fusion_Net(nn.Module):
         self.relu2 = nn.ReLU()
         self.fc3 = nn.Linear(256, 128)
         self.relu3 = nn.ReLU()
-        # self.fc4 = nn.Linear(128, 2)
-        # self.relu4 = nn.ReLU()
+        self.fc4 = nn.Linear(128, 2)
+        self.relu4 = nn.ReLU()
 
         # mgn 
         args: dict = {
-            "dim": 256,
+            "dim": 512,
             "unimodal_assign": "hard",
             "crossmodal_assign": "hard",
             "depth_vis": 3,
@@ -122,9 +122,9 @@ class AVQA_Fusion_Net(nn.Module):
         args = argparse.Namespace(**args)
 
         self.mgn = MGN_Net(args)
-        self.fc_visual_feature_map: nn.Linear = nn.Linear(512, 256)
-        self.fc_audio_feature_map: nn.Linear = nn.Linear(512, 256)
-        self.fc_text_future_map: nn.Linear = nn.Linear(512, 256)
+        # self.fc_visual_feature_map: nn.Linear = nn.Linear(512, 256)
+        # self.fc_audio_feature_map: nn.Linear = nn.Linear(512, 256)
+        # self.fc_text_future_map: nn.Linear = nn.Linear(512, 256)
 
 
     def forward(self, audio, visual_posi, visual_nega, question):
@@ -224,8 +224,8 @@ class AVQA_Fusion_Net(nn.Module):
         B = xq.shape[1]
         # visual_feat_grd_be = visual_feat_grd_posi.view(B, -1, 512)   # [B, T, 512]
         visual_feat_grd_be = visual_feat_before_grounding_posi.view(B, -1, 512)
-        visual_feat_grd_be = self.fc_visual_feature_map(visual_feat_grd_be)
-        #print(218, audio_feat.shape, visual_feat_grd_be.shape, visual_feat_grd_be.shape)  
+        # visual_feat_grd_be = self.fc_visual_feature_map(visual_feat_grd_be)
+
         a_logits, v_logits, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob = self.mgn(audio_feat, visual_feat_grd_be, visual_feat_grd_be)
         
         
@@ -235,7 +235,7 @@ class AVQA_Fusion_Net(nn.Module):
         ## attention, question as query on visual_feat_grd
 
         #start_time = time.time()
-        xq = F.avg_pool1d(xq, kernel_size=2, stride=2)
+        # xq = F.avg_pool1d(xq, kernel_size=2, stride=2)
         
 
         visual_feat_att = self.attn_v(xq, v_logits, v_logits, attn_mask=None, key_padding_mask=None)[0].squeeze(0)
@@ -248,7 +248,7 @@ class AVQA_Fusion_Net(nn.Module):
         # attention, question as query on audio
         #start_time = time.time()
 
-        audio_feat_be=audio_feat_pure.view(B, -1, 256)
+        audio_feat_be=audio_feat_pure.view(B, -1, 512)
         audio_feat = audio_feat_be.permute(1, 0, 2)
 
         audio_feat_be = audio_feat.permute(1, 0, 2)
@@ -268,7 +268,7 @@ class AVQA_Fusion_Net(nn.Module):
         #print("audio_vi_cat",end_time-start_time)
         
 
-        qst_feature = self.fc_audio_feature_map(qst_feature)
+        # qst_feature = self.fc_audio_feature_map(qst_feature)
         ## fusion with question
         start_time = time.time()
 

@@ -12,9 +12,9 @@ class MGN_Net(nn.Module):
     def __init__(self, args):
         super(MGN_Net, self).__init__()
 
-        self.fc_a =  nn.Linear(256, args.dim)
-        self.fc_v = nn.Linear(256, args.dim)
-        self.fc_st = nn.Linear(256, args.dim)
+        self.fc_a =  nn.Linear(512, args.dim)
+        self.fc_v = nn.Linear(512, args.dim)
+        self.fc_st = nn.Linear(512, args.dim)
         self.fc_fusion = nn.Linear(args.dim * 2, args.dim)
 
         # hard or soft assignment
@@ -108,6 +108,7 @@ class MGN_Net(nn.Module):
 
     def forward(self, audio, visual, visual_st):
         
+        # print(audio.shape)
         
         x1_0 = self.fc_a(audio)
         # x1_0 = x1_0.unsqueeze(0)
