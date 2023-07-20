@@ -125,6 +125,8 @@ class AVQA_Fusion_Net(nn.Module):
         # self.fc_visual_feature_map: nn.Linear = nn.Linear(512, 256)
         # self.fc_audio_feature_map: nn.Linear = nn.Linear(512, 256)
         # self.fc_text_future_map: nn.Linear = nn.Linear(512, 256)
+        
+        self.contrastive_loss = ContrastiveLoss()
 
 
     def forward(self, audio, visual_posi, visual_nega, question):
@@ -136,151 +138,110 @@ class AVQA_Fusion_Net(nn.Module):
         '''
 
         ## question features
-        #start_time = time.time()
         qst_feature = self.question_encoder(question)
         xq = qst_feature.unsqueeze(0)
-        end_time = time.time()
-        #print("question_features",end_time-start_time)
+        
+        ###############################################################################################
+        # visual posi
+        
+        audio_feat_posi, visual_feat_grd_posi, out_match_posi, contrastive_loss_posi = self.out_match_infer(audio, visual_posi)
+        
+        ###############################################################################################
 
-        ## audio features  [2*B*T, 1268]
-        #start_time = time.time()
-        audio_feat = F.relu(self.fc_a1(audio))
-        audio_feat = self.fc_a2(audio_feat)  
-        audio_feat_pure = audio_feat
-        B, T, C = audio_feat.size()             # [B, T, C]
-        audio_feat = audio_feat.view(B, T, C)    # [B*T, C]
-        #end_time = time.time()
-        #print("audio_features",end_time-start_time)
-
-        ## visual posi [2*B*T, C, H, W]
-        #start_time = time.time()
-        B, T, C, H, W = visual_posi.size()
-        temp_visual = visual_posi.view(B*T, C, H, W)            # [B*T, C, H, W]
-        v_feat = self.avgpool(temp_visual)                      # [B*T, C, 1, 1]
-        visual_feat_before_grounding_posi = v_feat.squeeze()    # [B*T, C]
-        #end_time = time.time()
-        #print("vidual_posi",end_time-start_time)
-
-        # (B, C, H, W) = temp_visual.size()
-        # v_feat = temp_visual.view(B, C, H * W)                      # [B*T, C, HxW]
-        # v_feat = v_feat.permute(0, 2, 1)                            # [B, HxW, C]
-        # visual_feat_posi = nn.functional.normalize(v_feat, dim=2)   # [B, HxW, C]
-
-        # ## audio-visual grounding posi
-        # audio_feat_aa = audio_feat.unsqueeze(-1)                        # [B*T, C, 1]
-        # audio_feat_aa = nn.functional.normalize(audio_feat_aa, dim=1)   # [B*T, C, 1]
-        # x2_va = torch.matmul(visual_feat_posi, audio_feat_aa).squeeze() # [B*T, HxW]
-
-        # x2_p = F.softmax(x2_va, dim=-1).unsqueeze(-2)                       # [B*T, 1, HxW]
-        # visual_feat_grd = torch.matmul(x2_p, visual_feat_posi)
-        # visual_feat_grd_after_grounding_posi = visual_feat_grd.squeeze()    # [B*T, C]   
-
-        # visual_gl = torch.cat((visual_feat_before_grounding_posi, visual_feat_grd_after_grounding_posi),dim=-1)
-        # visual_feat_grd = self.tanh(visual_gl)
-        # visual_feat_grd_posi = self.fc_gl(visual_feat_grd)              # [B*T, C]
-
-        # feat = torch.cat((audio_feat, visual_feat_grd_posi), dim=-1)    # [B*T, C*2], [B*T, 1024]
-
-        # feat = F.relu(self.fc1(feat))       # (1024, 512)
-        # feat = F.relu(self.fc2(feat))       # (512, 256)
-        # feat = F.relu(self.fc3(feat))       # (256, 128)
-        # out_match_posi = self.fc4(feat)     # (128, 2)
-
-        # ###############################################################################################
-        # # visual nega
-        # B, T, C, H, W = visual_nega.size()
-        # temp_visual = visual_nega.view(B*T, C, H, W)
-        # v_feat = self.avgpool(temp_visual)
-        # visual_feat_before_grounding_nega = v_feat.squeeze() # [B*T, C]
-
-        # (B, C, H, W) = temp_visual.size()
-        # v_feat = temp_visual.view(B, C, H * W)  # [B*T, C, HxW]
-        # v_feat = v_feat.permute(0, 2, 1)        # [B, HxW, C]
-        # visual_feat_nega = nn.functional.normalize(v_feat, dim=2)
-
-        # ##### av grounding nega
-        # x2_va = torch.matmul(visual_feat_nega, audio_feat_aa).squeeze()
-        # x2_p = F.softmax(x2_va, dim=-1).unsqueeze(-2)                       # [B*T, 1, HxW]
-        # visual_feat_grd = torch.matmul(x2_p, visual_feat_nega)
-        # visual_feat_grd_after_grounding_nega = visual_feat_grd.squeeze()    # [B*T, C]   
-
-        # visual_gl=torch.cat((visual_feat_before_grounding_nega,visual_feat_grd_after_grounding_nega),dim=-1)
-        # visual_feat_grd=self.tanh(visual_gl)
-        # visual_feat_grd_nega=self.fc_gl(visual_feat_grd)    # [B*T, C]
-
-        # # combine a and v
-        # feat = torch.cat((audio_feat, visual_feat_grd_nega), dim=-1)   # [B*T, C*2], [B*T, 1024]
-
-        # feat = F.relu(self.fc1(feat))       # (1024, 512)
-        # feat = F.relu(self.fc2(feat))       # (512, 256)
-        # feat = F.relu(self.fc3(feat))       # (256, 128)
-        # out_match_nega = self.fc4(feat)     # (128, 2)
+        ###############################################################################################
+        # visual nega
+        
+        audio_feat_nega, visual_feat_grd_nega, out_match_nega, contrastive_loss_nega = self.out_match_infer(audio, visual_nega)
 
         ###############################################################################################
 
         # out_match=None
         # match_label=None
-        #start_time = time.time()
+
         B = xq.shape[1]
-        # visual_feat_grd_be = visual_feat_grd_posi.view(B, -1, 512)   # [B, T, 512]
-        visual_feat_grd_be = visual_feat_before_grounding_posi.view(B, -1, 512)
-        # visual_feat_grd_be = self.fc_visual_feature_map(visual_feat_grd_be)
-
-        a_logits, v_logits, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob = self.mgn(audio_feat, visual_feat_grd_be, visual_feat_grd_be)
-        
-        
+        visual_feat_grd_be = visual_feat_grd_posi.view(B, -1, 512)   # [B, T, 512]
         visual_feat_grd=visual_feat_grd_be.permute(1,0,2)
-        #end_time = time.time()
-        #print("vidual_feat_grad",end_time-start_time)
-        ## attention, question as query on visual_feat_grd
-
-        #start_time = time.time()
-        # xq = F.avg_pool1d(xq, kernel_size=2, stride=2)
         
-
-        visual_feat_att = self.attn_v(xq, v_logits, v_logits, attn_mask=None, key_padding_mask=None)[0].squeeze(0)
+        ## attention, question as query on visual_feat_grd
+        visual_feat_att = self.attn_v(xq, visual_feat_grd, visual_feat_grd, attn_mask=None, key_padding_mask=None)[0].squeeze(0)
         src = self.linear12(self.dropout1(F.relu(self.linear11(visual_feat_att))))
         visual_feat_att = visual_feat_att + self.dropout2(src)
         visual_feat_att = self.norm1(visual_feat_att)
-        #end_time = time.time()
-        #print("vidual_feat_att",end_time-start_time)
-
+    
         # attention, question as query on audio
-        #start_time = time.time()
-
-        audio_feat_be=audio_feat_pure.view(B, -1, 512)
+        audio_feat_be=audio_feat_posi.view(B, -1, 512)
         audio_feat = audio_feat_be.permute(1, 0, 2)
-
-        audio_feat_be = audio_feat.permute(1, 0, 2)
-
-        audio_feat_att = self.attn_a(xq, a_logits, a_logits, attn_mask=None,key_padding_mask=None)[0].squeeze(0)
+        audio_feat_att = self.attn_a(xq, audio_feat, audio_feat, attn_mask=None,key_padding_mask=None)[0].squeeze(0)
         src = self.linear22(self.dropout3(F.relu(self.linear21(audio_feat_att))))
         audio_feat_att = audio_feat_att + self.dropout4(src)
         audio_feat_att = self.norm2(audio_feat_att)
-        #end_time = time.time()
-        #print("audio_feat_att",end_time-start_time)
         
-        #start_time = time.time()
-        feat = torch.cat((audio_feat_att+audio_feat_be.mean(dim=-2).squeeze(), visual_feat_att + visual_feat_grd_be.mean(dim=-2)), dim=-1)
+        feat = torch.cat((audio_feat_att+audio_feat_be.mean(dim=-2).squeeze(), visual_feat_att+visual_feat_grd_be.mean(dim=-2).squeeze()), dim=-1)
         feat = self.tanh(feat)
         feat = self.fc_fusion(feat)
-        #end_time = time.time()
-        #print("audio_vi_cat",end_time-start_time)
-        
 
-        # qst_feature = self.fc_audio_feature_map(qst_feature)
         ## fusion with question
-        start_time = time.time()
-
         combined_feature = torch.mul(feat, qst_feature)
         combined_feature = self.tanh(combined_feature)
-        
         out_qa = self.fc_ans(combined_feature)              # [batch_size, ans_vocab_size]
-        #end_time = time.time()
-        #print("fusion_with_question",end_time-start_time)
-        #out_qa = self.mgn(audio_feat_att,visual_feat_att)
 
-        return out_qa
-    # out_match_posi,out_match_nega
+        return out_qa, out_match_posi, out_match_nega, contrastive_loss_posi + contrastive_loss_nega
 
+    def out_match_infer(self, audio, visual):
+        
+        ## audio features  [2*B*T, 128]
+        audio_feat = F.relu(self.fc_a1(audio))
+        audio_feat = self.fc_a2(audio_feat)  
+        audio_feat_pure = audio_feat
+        B, T, C = audio_feat.size()             # [B, T, C]
+        audio_feat = audio_feat.view(B, T, C)    # [B*T, C]
 
+        ## visual posi [2*B*T, C, H, W]
+        B, T, C, H, W = visual.size()
+        temp_visual = visual.view(B*T, C, H, W)            # [B*T, C, H, W]
+        v_feat = self.avgpool(temp_visual)                      # [B*T, C, 1, 1]
+        visual_feat_before_grounding = v_feat.squeeze()    # [B*T, C]
+        visual_feat_before_grounding = visual_feat_before_grounding.view(B, -1, C)
+        
+        grouped_audio_embedding, grouped_visual_embedding, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob = self.mgn(audio_feat, visual_feat_before_grounding, visual_feat_before_grounding)
+
+        (B, C, H, W) = temp_visual.size()
+        v_feat = temp_visual.view(B, C, H * W)                      # [B*T, C, HxW]
+        v_feat = v_feat.permute(0, 2, 1)                            # [B, HxW, C]
+        visual_feat_posi = nn.functional.normalize(v_feat, dim=2)   # [B, HxW, C]
+
+        ## audio-visual grounding posi
+        audio_feat_aa = grouped_audio_embedding.unsqueeze(-1)                        # [B*T, C, 1]
+        audio_feat_aa = nn.functional.normalize(audio_feat_aa, dim=1)   # [B*T, C, 1]
+        x2_va = torch.matmul(visual_feat_posi, audio_feat_aa).squeeze() # [B*T, HxW]
+
+        x2_p = F.softmax(x2_va, dim=-1).unsqueeze(-2)                       # [B*T, 1, HxW]
+        visual_feat_grd = torch.matmul(x2_p, visual_feat_posi)
+        visual_feat_grd_after_grounding_posi = visual_feat_grd.squeeze()    # [B*T, C]   
+
+        visual_gl = torch.cat((grouped_visual_embedding, visual_feat_grd_after_grounding_posi),dim=-1)
+        visual_feat_grd = self.tanh(visual_gl)
+        visual_feat_grd = self.fc_gl(visual_feat_grd)              # [B*T, C]
+
+        feat = torch.cat((grouped_audio_embedding, visual_feat_grd), dim=-1)    # [B*T, C*2], [B*T, 1024]
+
+        feat = F.relu(self.fc1(feat))       # (1024, 512)
+        feat = F.relu(self.fc2(feat))       # (512, 256)
+        feat = F.relu(self.fc3(feat))       # (256, 128)
+        out_match = self.fc4(feat)     # (128, 2)
+        
+        return grouped_audio_embedding, visual_feat_grd, out_match, self.contrastive_loss(aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob)
+    
+
+class ContrastiveLoss(nn.Module):
+    def __init__(self, margin=0.5):
+        super(ContrastiveLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self, *outputs):
+        outputs = list(outputs)
+        outputs_mean = torch.mean(torch.cat(torch.Tensor(outputs, dim=0)), dim=0)
+        for output in outputs:
+            euclidean_distance = F.pairwise_distance(output, outputs_mean)
+            loss_contrastive = torch.mean(torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
+        return loss_contrastive

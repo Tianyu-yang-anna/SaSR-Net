@@ -55,28 +55,24 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
     correct_qa = 0
     #start_time = time.time()
     for batch_idx, sample in enumerate(train_loader):
-        #end_time = time.time()
-        #logging.debug("dataload_time=", end_time - start_time)
         audio,visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
 
         optimizer.zero_grad()
-        #start_time = time.time()
-        out_qa = model(audio, visual_posi,visual_nega, question)  
-        #end_time = time.time()
-        #logging.debug("infrence_time= ", end_time - start_time)
-        # out_match,match_label=batch_organize(out_match_posi,out_match_nega)  
-        # out_match,match_label = out_match.type(torch.FloatTensor).cuda(), match_label.type(torch.LongTensor).cuda()
+        out_qa, out_match_posi, out_match_nega, contrastive_loss = model(audio, visual_posi,visual_nega, question)  
+
+        out_match,match_label=batch_organize(out_match_posi,out_match_nega)  
+        out_match,match_label = out_match.type(torch.FloatTensor).cuda(), match_label.type(torch.LongTensor).cuda()
     
         # output.clamp_(min=1e-7, max=1 - 1e-7)
-        # loss_match=criterion(out_match,match_label)
+        loss_match = criterion(out_match,match_label)
         # print("out_q",out_qa)
         # print("target",target)
         loss_qa = criterion(out_qa, target)
         # print("75,out_q",out_qa)
         # print("76,target",target)
         # print("73,lossqa", loss_qa)
-        # loss = loss_qa + 0.5*loss_match
-        loss = loss_qa
+        loss = loss_qa + 0.5 * loss_match + 0.5 * contrastive_loss
+        # loss = loss_qa
 
 
         # writer.add_scalar('run/match',loss_match.item(), epoch * len(train_loader) + batch_idx)

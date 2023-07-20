@@ -43,7 +43,7 @@ class MGN_Net(nn.Module):
                             norm_layer=nn.LayerNorm,
                             out_dim_grouping=args.dim,
                             num_heads_grouping=1,
-                            num_group_tokens=25,
+                            num_group_tokens=22,
                             num_output_groups=25,
                             hard_assignment=unimodal_hard_assignment,
                             use_han=True
@@ -62,7 +62,7 @@ class MGN_Net(nn.Module):
                             norm_layer=nn.LayerNorm,
                             out_dim_grouping=args.dim,
                             num_heads_grouping=1,
-                            num_group_tokens=25,
+                            num_group_tokens=22,
                             num_output_groups=25,
                             hard_assignment=unimodal_hard_assignment,
                             use_han=False
