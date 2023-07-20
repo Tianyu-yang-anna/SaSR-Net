@@ -25,8 +25,8 @@ class MGN_Net(nn.Module):
         crossmodal_hard_assignment = True if args.crossmodal_assign == 'hard' else False
 
         # learnable tokens
-        self.audio_token = nn.Parameter(torch.zeros(25, args.dim))
-        self.visual_token = nn.Parameter(torch.zeros(25, args.dim))
+        self.audio_token = nn.Parameter(torch.zeros(22, args.dim))
+        self.visual_token = nn.Parameter(torch.zeros(22, args.dim))
         # self.visual_token = self.audio_token
 
         # class-aware uni-modal grouping
@@ -44,7 +44,7 @@ class MGN_Net(nn.Module):
                             out_dim_grouping=args.dim,
                             num_heads_grouping=1,
                             num_group_tokens=22,
-                            num_output_groups=25,
+                            num_output_groups=22,
                             hard_assignment=unimodal_hard_assignment,
                             use_han=True
                         )
@@ -63,7 +63,7 @@ class MGN_Net(nn.Module):
                             out_dim_grouping=args.dim,
                             num_heads_grouping=1,
                             num_group_tokens=22,
-                            num_output_groups=25,
+                            num_output_groups=22,
                             hard_assignment=unimodal_hard_assignment,
                             use_han=False
                         )
@@ -82,8 +82,8 @@ class MGN_Net(nn.Module):
                             norm_layer=nn.LayerNorm,
                             out_dim_grouping=args.dim,
                             num_heads_grouping=1,
-                            num_group_tokens=25,
-                            num_output_groups=25,
+                            num_group_tokens=22,
+                            num_output_groups=22,
                             hard_assignment=crossmodal_hard_assignment,
                             use_han=False                        
                         )
@@ -93,7 +93,7 @@ class MGN_Net(nn.Module):
         self.fc_prob_a = nn.Linear(args.dim, 1)
         self.fc_prob_v = nn.Linear(args.dim, 1)
 
-        self.fc_cls = nn.Linear(args.dim, 25)
+        self.fc_cls = nn.Linear(args.dim, 22)
 
         self.apply(self._init_weights)
 
@@ -121,11 +121,11 @@ class MGN_Net(nn.Module):
         x2_0 = self.fc_fusion(x2_0)
 
         # visual uni-modal groupingf
-        x2, attn_visual_dict, _ = self.visual_cug(x2_0, self.visual_token, return_attn=True)
+        x2, attn_visual_dict, v_attn = self.visual_cug(x2_0, self.visual_token, return_attn=True)
 
         # audio uni-modal grouping
         # print(123, x1_0.shape, self.audio_token.shape, x2_0.shape)
-        x1, attn_audio_dict, _ = self.audio_cug(x1_0, self.audio_token, x2_0, return_attn=True)
+        x1, attn_audio_dict, a_attn = self.audio_cug(x1_0, self.audio_token, x2_0, return_attn=True)
 
         # modality-aware cross-modal grouping
         x, _, _ = self.av_mcg(x1, x2, return_attn=True)
@@ -152,7 +152,7 @@ class MGN_Net(nn.Module):
         v_frame_prob = (v_prob * attn_visual).permute(0, 2, 1)                    # [B, 10, 25]
         v_prob = v_prob.sum(dim=-1)                                               # [B, 25]
 
-        return x1, x2, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob
+        return x1, x2, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob, a_attn, v_attn
 
 
 # class MGN_Net(nn.Module):

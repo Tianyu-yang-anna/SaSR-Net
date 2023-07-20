@@ -213,7 +213,7 @@ def main():
     parser.add_argument(
         "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
     parser.add_argument(
-        '--batch-size', type=int, default=64, metavar='N', help='input batch size for training (default: 16)')
+        '--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
         '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(

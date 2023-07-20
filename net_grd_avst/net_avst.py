@@ -98,7 +98,7 @@ class AVQA_Fusion_Net(nn.Module):
         self.fc_ans = nn.Linear(512, 42)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        # self.fc_gl=nn.Linear(1024,512)
+        self.fc_gl=nn.Linear(1024,512)
 
         # combine
         self.fc1 = nn.Linear(1024, 512)
@@ -203,20 +203,24 @@ class AVQA_Fusion_Net(nn.Module):
         visual_feat_before_grounding = v_feat.squeeze()    # [B*T, C]
         visual_feat_before_grounding = visual_feat_before_grounding.view(B, -1, C)
         
-        grouped_audio_embedding, grouped_visual_embedding, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob = self.mgn(audio_feat, visual_feat_before_grounding, visual_feat_before_grounding)
+        _, _, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob, grouped_audio_embedding, grouped_visual_embedding = self.mgn(audio_feat, visual_feat_before_grounding, visual_feat_before_grounding)
 
+        grouped_audio_embedding = grouped_audio_embedding.squeeze()
+        grouped_visual_embedding = grouped_visual_embedding.squeeze()
+        
         (B, C, H, W) = temp_visual.size()
         v_feat = temp_visual.view(B, C, H * W)                      # [B*T, C, HxW]
         v_feat = v_feat.permute(0, 2, 1)                            # [B, HxW, C]
-        visual_feat_posi = nn.functional.normalize(v_feat, dim=2)   # [B, HxW, C]
+        visual_feat = nn.functional.normalize(v_feat, dim=2)   # [B, HxW, C]
 
         ## audio-visual grounding posi
-        audio_feat_aa = grouped_audio_embedding.unsqueeze(-1)                        # [B*T, C, 1]
+        audio_feat_aa = grouped_audio_embedding.unsqueeze(dim=-1)                   # [B*T, C, 1]
         audio_feat_aa = nn.functional.normalize(audio_feat_aa, dim=1)   # [B*T, C, 1]
-        x2_va = torch.matmul(visual_feat_posi, audio_feat_aa).squeeze() # [B*T, HxW]
+
+        x2_va = torch.matmul(visual_feat, audio_feat_aa).squeeze() # [B*T, HxW]
 
         x2_p = F.softmax(x2_va, dim=-1).unsqueeze(-2)                       # [B*T, 1, HxW]
-        visual_feat_grd = torch.matmul(x2_p, visual_feat_posi)
+        visual_feat_grd = torch.matmul(x2_p, visual_feat)
         visual_feat_grd_after_grounding_posi = visual_feat_grd.squeeze()    # [B*T, C]   
 
         visual_gl = torch.cat((grouped_visual_embedding, visual_feat_grd_after_grounding_posi),dim=-1)
@@ -230,7 +234,7 @@ class AVQA_Fusion_Net(nn.Module):
         feat = F.relu(self.fc3(feat))       # (256, 128)
         out_match = self.fc4(feat)     # (128, 2)
         
-        return grouped_audio_embedding, visual_feat_grd, out_match, self.contrastive_loss(aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob)
+        return grouped_audio_embedding, visual_feat_grd, out_match, self.contrastive_loss(aud_cls_prob, vis_cls_prob) + self.contrastive_loss(global_prob, a_prob, v_prob) + self.contrastive_loss(a_frame_prob, v_frame_prob)
     
 
 class ContrastiveLoss(nn.Module):
@@ -240,7 +244,7 @@ class ContrastiveLoss(nn.Module):
 
     def forward(self, *outputs):
         outputs = list(outputs)
-        outputs_mean = torch.mean(torch.cat(torch.Tensor(outputs, dim=0)), dim=0)
+        outputs_mean = torch.mean(torch.cat(outputs, dim=0), dim=0)
         for output in outputs:
             euclidean_distance = F.pairwise_distance(output, outputs_mean)
             loss_contrastive = torch.mean(torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
