@@ -213,9 +213,9 @@ def main():
     parser.add_argument(
         "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
     parser.add_argument(
-        '--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 16)')
+        '--batch-size', type=int, default=64, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
-        '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
+        '--epochs', type=int, default=30, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
         '--lr', type=float, default=3e-4, metavar='LR', help='learning rate (default: 3e-4)')
     parser.add_argument(
@@ -250,7 +250,7 @@ def main():
         train_dataset = AVQA_dataset(label=args.label_train, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,
                                     transform=transforms.Compose([ToTensor()]), mode_flag='train')
         #train_loader = DataLoader(train_dataset, batch_size=ags.batch_size, shuffle=True, num_workers=8, pin_memory=True)
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=11, pin_memory=True)
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=8, pin_memory=True)
         val_dataset = AVQA_dataset(label=args.label_val, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,
                                     transform=transforms.Compose([ToTensor()]), mode_flag='val')
         val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=1, pin_memory=True)

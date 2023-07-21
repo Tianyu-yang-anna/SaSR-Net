@@ -214,19 +214,22 @@ class AVQA_Fusion_Net(nn.Module):
         visual_feat = nn.functional.normalize(v_feat, dim=2)   # [B, HxW, C]
 
         ## audio-visual grounding posi
-        audio_feat_aa = grouped_audio_embedding.unsqueeze(dim=-1)                   # [B*T, C, 1]
+        (B, T, C) = grouped_audio_embedding.size()
+        audio_feat_aa = grouped_audio_embedding.view(B * T, -1).unsqueeze(dim=-1)                   # [B*T, C, 1]
         audio_feat_aa = nn.functional.normalize(audio_feat_aa, dim=1)   # [B*T, C, 1]
 
         x2_va = torch.matmul(visual_feat, audio_feat_aa).squeeze() # [B*T, HxW]
 
         x2_p = F.softmax(x2_va, dim=-1).unsqueeze(-2)                       # [B*T, 1, HxW]
         visual_feat_grd = torch.matmul(x2_p, visual_feat)
-        visual_feat_grd_after_grounding_posi = visual_feat_grd.squeeze()    # [B*T, C]   
+        visual_feat_grd_after_grounding = visual_feat_grd.squeeze()    # [B*T, C]   
 
-        visual_gl = torch.cat((grouped_visual_embedding, visual_feat_grd_after_grounding_posi),dim=-1)
+        grouped_visual_embedding = grouped_visual_embedding.flatten(0, 1)
+        visual_gl = torch.cat((grouped_visual_embedding, visual_feat_grd_after_grounding),dim=-1)
         visual_feat_grd = self.tanh(visual_gl)
         visual_feat_grd = self.fc_gl(visual_feat_grd)              # [B*T, C]
 
+        grouped_audio_embedding = grouped_audio_embedding.flatten(0, 1)
         feat = torch.cat((grouped_audio_embedding, visual_feat_grd), dim=-1)    # [B*T, C*2], [B*T, 1024]
 
         feat = F.relu(self.fc1(feat))       # (1024, 512)
