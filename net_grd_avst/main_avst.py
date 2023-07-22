@@ -102,7 +102,7 @@ def eval(model, val_loader,epoch):
         for batch_idx, sample in enumerate(val_loader):
             audio,visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
 
-            out_qa = model(audio, visual_posi,visual_nega, question)
+            out_qa, out_match_posi, out_match_nega, contrastive_loss = model(audio, visual_posi,visual_nega, question)
 
             _, predicted = torch.max(out_qa.data, 1)
             total_qa += out_qa.size(0)
@@ -213,11 +213,11 @@ def main():
     parser.add_argument(
         "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
     parser.add_argument(
-        '--batch-size', type=int, default=64, metavar='N', help='input batch size for training (default: 16)')
+        '--batch-size', type=int, default=32, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
         '--epochs', type=int, default=30, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
-        '--lr', type=float, default=3e-4, metavar='LR', help='learning rate (default: 3e-4)')
+        '--lr', type=float, default=4e-4, metavar='LR', help='learning rate (default: 3e-4)')
     parser.add_argument(
         "--model", type=str, default='AVQA_Fusion_Net', help="with model to use")
     parser.add_argument(
@@ -231,7 +231,7 @@ def main():
     parser.add_argument(
         "--checkpoint", type=str, default='avst', help="save model name")
     parser.add_argument(
-        '--gpu', type=str, default='0, 1', help='gpu device number')
+        '--gpu', type=str, default='2', help='gpu device number')
 
 
     args = parser.parse_args()
@@ -250,10 +250,10 @@ def main():
         train_dataset = AVQA_dataset(label=args.label_train, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,
                                     transform=transforms.Compose([ToTensor()]), mode_flag='train')
         #train_loader = DataLoader(train_dataset, batch_size=ags.batch_size, shuffle=True, num_workers=8, pin_memory=True)
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=8, pin_memory=True)
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
         val_dataset = AVQA_dataset(label=args.label_val, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,
                                     transform=transforms.Compose([ToTensor()]), mode_flag='val')
-        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=1, pin_memory=True)
+        val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=1, pin_memory=True)
 
 
         # ===================================== load pretrained model ===============================================

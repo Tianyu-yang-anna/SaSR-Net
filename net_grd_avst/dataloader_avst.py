@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List, Any, Callable
 import numpy as np
 import torch
 import os
@@ -13,7 +13,6 @@ from munch import munchify
 import time
 import random
 import torch.nn.functional as F
-
 
 # def TransformImage(img):
 
@@ -71,8 +70,7 @@ def ids_to_multinomial(id, categories):
 class AVQA_dataset(Dataset):
 
     def __init__(self, label, audio_dir, video_res14x14_dir, transform=None, mode_flag='train'):
-
-
+                
         samples = json.load(open('./data/json/avqa-train.json', 'r'))
 
         # nax =  nne
@@ -115,76 +113,69 @@ class AVQA_dataset(Dataset):
 
         self.video_list = video_list
         self.video_len = 60 * len(video_list)
+        self.frame_ids: np.ndarray[int] = np.arange(self.video_len)
 
     def __len__(self):
         return len(self.samples)
 
-
     def __getitem__(self, idx):
-        
-        #start_time = time.time()
+        # start_time_ = time.time()
         sample = self.samples[idx]
         name = sample['video_id']
-        audio = np.load(os.path.join(self.audio_dir, name + '.npy'))
+        audio = np.load(os.path.join(self.audio_dir, name + '.npy'), mmap_mode='r')
         audio = audio[::6, :]
-        #end_time = time.time()
-        #print("load_audio", end_time - start_time)
 
-        #start_time = time.time()
         # visual_out_res18_path = '/home/guangyao_li/dataset/avqa-features/visual_14x14'
         visual_posi = np.load(os.path.join(self.video_res14x14_dir, name + '.npy'))  
-        #end_time = time.time()
-        #print("load_vidual_res", end_time - start_time)
 
-        #start_time = time.time()
         # visual_posi [60, 512, 14, 14], select 10 frames from one video
         visual_posi = visual_posi[::6, :]
-        video_idx=self.video_list.index(name)
-        #end_time = time.time()
-        #print("load_vidual_posi", end_time - start_time)
+        video_idx = self.video_list.index(name)
+        # valid_frame_ids: np.ndarray[int] = self.frame_ids[self.frame_ids // 60 != video_idx]
+        # neg_frame_ids: np.ndarray[int] = np.random.choice(valid_frame_ids, size=visual_posi.shape[0], replace=False)
+        neg_frame_ids: List[int] = [random_int(0, self.video_len - 1, lambda x: x // 60 != video_idx) for _ in range(visual_posi.shape[0])]
 
-        load_vidual_neg_1, load_vidual_neg_2, load_vidual_neg_3, load_vidual_neg_4, load_vidual_neg_5, load_vidual_neg_6\
-            = 0, 0, 0, 0, 0, 0
-        #start_time = time.time()
+        start_time = time.time()
+        
+        visual_nega_list: List[np.ndarray[int]] = []
+        
         for i in range(visual_posi.shape[0]):
-            #start_time = time.time()
-            while(1):
-                neg_frame_id = random.randint(0, self.video_len - 1)
-                if (int(neg_frame_id/60) != video_idx):
-                    break
-            #end_time = time.time()
-            #load_vidual_neg_1 += end_time - start_time
+            neg_frame_id: int = neg_frame_ids[i]
+            
+            neg_video_id: int = neg_frame_id // 60
+            neg_frame_flag: int = neg_frame_id % 60
 
-            neg_video_id = int(neg_frame_id / 60)
-            neg_frame_flag = neg_frame_id % 60
-            start_time = time.time()
-            neg_video_name = self.video_list[neg_video_id]
-            #end_time = time.time()
-            #load_vidual_neg_2 += end_time - start_time
+            neg_video_name: str = self.video_list[neg_video_id]
 
-            #start_time = time.time()
-            visual_nega_out_res18=np.load(os.path.join(self.video_res14x14_dir, neg_video_name + '.npy'))
-            #end_time = time.time()
-            #load_vidual_neg_3 += end_time - start_time
+            visual_nega_out_res18: np.ndarray[Any] = np.load(os.path.join(self.video_res14x14_dir, neg_video_name + '.npy'), mmap_mode='r')
+            visual_nega_list.append(visual_nega_out_res18[neg_frame_flag,:,:,:])
+        
+        visual_nega: Any = np.stack(visual_nega_list, axis=0)
+        visual_nega: Any = torch.from_numpy(visual_nega)
+        # for i in range(visual_posi.shape[0]):
+        #     while(1):
+        #         neg_frame_id = random.randint(0, self.video_len - 1)
+        #         if (int(neg_frame_id/60) != video_idx):
+        #             break
 
-            #start_time = time.time()
-            visual_nega_out_res18 = torch.from_numpy(visual_nega_out_res18)
-            #end_time = time.time()
-            #load_vidual_neg_4 += end_time - start_time
+        #     neg_video_id = int(neg_frame_id / 60)
+        #     neg_frame_flag = neg_frame_id % 60
 
-            #start_time = time.time()
-            visual_nega_clip=visual_nega_out_res18[neg_frame_flag,:,:,:].unsqueeze(0)
-            #end_time = time.time()
-            #load_vidual_neg_5 += end_time - start_time
+        #     neg_video_name = self.video_list[neg_video_id]
 
-            if(i==0):
-                visual_nega=visual_nega_clip
-            else:
-                #start_time = time.time()
-                visual_nega=torch.cat((visual_nega,visual_nega_clip),dim=0)
-                #end_time = time.time()
-                #load_vidual_neg_6 += end_time - start_time
+        #     visual_nega_out_res18=np.load(os.path.join(self.video_res14x14_dir, neg_video_name + '.npy'))
+        #     visual_nega_out_res18 = torch.from_numpy(visual_nega_out_res18)
 
+        #     visual_nega_clip=visual_nega_out_res18[neg_frame_flag,:,:,:].unsqueeze(0)
+
+        #     if(i==0):
+        #         visual_nega=visual_nega_clip
+        #     else:
+        #         visual_nega=torch.cat((visual_nega,visual_nega_clip),dim=0)
+
+        
+        # end_time = time.time()
+        # print(f"{idx}: process video time: {end_time - start_time}")
         #end_time = time.time()
         # print("load_vidual_neg", end_time - start_time)
         # print("load_visual_neg_1", load_vidual_neg_1)
@@ -198,7 +189,6 @@ class AVQA_dataset(Dataset):
         # visual nega [60, 512, 14, 14]
 
         # question
-        #start_time = time.time()
         question_id = sample['question_id']
         question = sample['question_content'].rstrip().split(' ')
         question[-1] = question[-1][:-1]
@@ -214,8 +204,6 @@ class AVQA_dataset(Dataset):
                 question.append('<pad>')
         idxs = [self.word_to_ix[w] for w in question]
         ques = torch.tensor(idxs, dtype=torch.long)
-        #end_time = time.time()
-        #print("load_question", end_time - start_time)
 
         # answer
         #start_time = time.time()
@@ -229,8 +217,18 @@ class AVQA_dataset(Dataset):
         
         if self.transform:
             sample = self.transform(sample)
+            
+        # end_time_ = time.time()
+        # print(f"{idx}: process all time: {end_time_ - start_time_}")
 
         return sample
+    
+
+def random_int(min_value: int=0, max_value: int=10000, filter_key: Callable[[int], bool]=None) -> int:
+    while True:
+        i = random.randint(0, max_value)
+        if filter_key(i):
+            return i
         
 
 class ToTensor(object):
@@ -249,34 +247,3 @@ class ToTensor(object):
                 'visual_nega': sample['visual_nega'],
                 'question': sample['question'],
                 'label': label}
-    
-
-class MasterSlaveDataLoader(DataLoader):
-    def __iter__(self) -> _BaseDataLoaderIter:
-        num_gpus: int = torch.cuda.device_count()
-        gpu_id: int = torch.cuda.current_device()
-        data_iter: iter = iter(self.dataset)
-        num_batches: int = len(self) // num_gpus 
-        for i in range(num_batches):
-            batch = list()
-            for _ in range(num_gpus):
-                if gpu_id < num_gpus:
-                    try:
-                        data = next(data_iter)
-                        batch.append(data)
-                    except StopIteration:
-                        break 
-                else:
-                    break 
-            if batch:
-                ret = {}
-                values = []
-                for key in batch[0].keys():
-                    values.clear()
-                    for e in batch:
-                        values.append(e[key])
-                    if (isinstance(values[0], torch.Tensor)):
-                        ret[key] = torch.stack(values, dim=0).cuda(gpu_id)
-                    else:
-                        ret[key] = torch.tensor(np.stack(values, axis=0)).cuda(gpu_id)
-                yield ret 

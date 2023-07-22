@@ -26,8 +26,8 @@ class MGN_Net(nn.Module):
 
         # learnable tokens
         self.audio_token = nn.Parameter(torch.zeros(22, args.dim))
-        self.visual_token = nn.Parameter(torch.zeros(22, args.dim))
-        # self.visual_token = self.audio_token
+        # self.visual_token = nn.Parameter(torch.zeros(22, args.dim))
+        self.visual_token = self.audio_token
 
         # class-aware uni-modal grouping
         self.audio_cug = ModalityTrans(

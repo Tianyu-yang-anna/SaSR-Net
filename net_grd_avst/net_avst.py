@@ -204,9 +204,6 @@ class AVQA_Fusion_Net(nn.Module):
         visual_feat_before_grounding = visual_feat_before_grounding.view(B, -1, C)
         
         _, _, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob, grouped_audio_embedding, grouped_visual_embedding = self.mgn(audio_feat, visual_feat_before_grounding, visual_feat_before_grounding)
-
-        grouped_audio_embedding = grouped_audio_embedding.squeeze()
-        grouped_visual_embedding = grouped_visual_embedding.squeeze()
         
         (B, C, H, W) = temp_visual.size()
         v_feat = temp_visual.view(B, C, H * W)                      # [B*T, C, HxW]
