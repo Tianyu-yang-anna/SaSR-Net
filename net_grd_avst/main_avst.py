@@ -64,15 +64,10 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
         out_match,match_label = out_match.type(torch.FloatTensor).cuda(), match_label.type(torch.LongTensor).cuda()
     
         # output.clamp_(min=1e-7, max=1 - 1e-7)
-        loss_match = criterion(out_match,match_label)
-        # print("out_q",out_qa)
-        # print("target",target)
+        # loss_match = criterion(out_match,match_label)
         loss_qa = criterion(out_qa, target)
-        # print("75,out_q",out_qa)
-        # print("76,target",target)
-        # print("73,lossqa", loss_qa)
-        loss = loss_qa + 0.5 * loss_match + 0.5 * contrastive_loss
-        # loss = loss_qa
+        # loss = loss_qa + 0.5 * contrastive_loss
+        loss = loss_qa
 
 
         # writer.add_scalar('run/match',loss_match.item(), epoch * len(train_loader) + batch_idx)
@@ -217,7 +212,7 @@ def main():
     parser.add_argument(
         '--epochs', type=int, default=30, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
-        '--lr', type=float, default=4e-4, metavar='LR', help='learning rate (default: 3e-4)')
+        '--lr', type=float, default=3e-3, metavar='LR', help='learning rate (default: 3e-4)')
     parser.add_argument(
         "--model", type=str, default='AVQA_Fusion_Net', help="with model to use")
     parser.add_argument(
@@ -253,7 +248,7 @@ def main():
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
         val_dataset = AVQA_dataset(label=args.label_val, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,
                                     transform=transforms.Compose([ToTensor()]), mode_flag='val')
-        val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=1, pin_memory=True)
+        val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=True)
 
 
         # ===================================== load pretrained model ===============================================

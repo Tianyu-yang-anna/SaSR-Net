@@ -224,7 +224,7 @@ class AVQA_dataset(Dataset):
         return sample
     
 
-def random_int(min_value: int=0, max_value: int=10000, filter_key: Callable[[int], bool]=None) -> int:
+def random_int(min_value: int=0, max_value: int=10000, filter_key: Callable[[int], bool]=lambda _: True) -> int:
     while True:
         i = random.randint(0, max_value)
         if filter_key(i):
