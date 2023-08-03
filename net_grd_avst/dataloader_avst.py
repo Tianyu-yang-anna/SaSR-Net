@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, List, Any, Callable
+from typing import Optional, Sequence, List, Any, Callable, Dict
 import numpy as np
 import torch
 import os
@@ -13,6 +13,12 @@ from munch import munchify
 import time
 import random
 import torch.nn.functional as F
+
+from typing import *
+from collections import OrderedDict
+
+T = TypeVar('T')
+S = TypeVar('S')
 
 # def TransformImage(img):
 
@@ -58,19 +64,41 @@ import torch.nn.functional as F
 #     return select_img
 
 
-def ids_to_multinomial(id, categories):
-    """ label encoding
-    Returns:
-      1d array, multimonial representation, e.g. [1,0,1,0,0,...]
-    """
-    id_to_idx = {id: index for index, id in enumerate(categories)}
+class LRU_cache(Generic[T, S]):
+    def __init__(self, max_size: Optional[int]=None) -> None:
+        self.cache: OrderedDict[T, S] = OrderedDict()
+        self.count: int = 0
+        self.max_size: int = max_size
+    
+    def setdefault(self, key: T, _default_value: Optional[S]=None) -> S:
+        if key in self.cache:
+            return self.cache[key]
+        self.cache[key] = _default_value
+        self.count += 1
+        if self.max_size is not None and self.count > self.max_size:
+            self.cache.popitem(last=False)
+        return _default_value
+        
+    def __len__(self) -> int:
+        return self.count
 
-    return id_to_idx[id]
+
+def func_ids_to_multinomial(categories):
+    id_to_idx = {id: index for index, id in enumerate(categories)}
+    
+    def ids_to_multinomial(id):
+        """ label encoding
+        Returns:
+        1d array, multimonial representation, e.g. [1,0,1,0,0,...]
+        """
+
+        return id_to_idx[id]
+    return ids_to_multinomial
 
 class AVQA_dataset(Dataset):
 
     def __init__(self, label, audio_dir, video_res14x14_dir, transform=None, mode_flag='train'):
-                
+  
         samples = json.load(open('./data/json/avqa-train.json', 'r'))
 
         # nax =  nne
@@ -114,6 +142,13 @@ class AVQA_dataset(Dataset):
         self.video_list = video_list
         self.video_len = 60 * len(video_list)
         self.frame_ids: np.ndarray[int] = np.arange(self.video_len)
+        
+        self.audio_data: LRU_cache[str, np.ndarray[Any]] = LRU_cache(max_size=None)
+        self.visual_data: LRU_cache[str, np.ndarray[Any]] = LRU_cache(max_size=None)
+        
+        self.ids_to_multinomial = func_ids_to_multinomial(self.ans_vocab)
+        self.items: List[str] = ['cello', 'congas', 'pipa', 'ukulele', 'piano', 'accordion', 'clarinet', 'guzheng', 'saxophone', 'drum', 'violin', 'bagpipe', 'bassoon', 'acoustic_guitar', 'banjo', 'electric_bass', 'flute', 'trumpet', 'erhu', 'xylophone', 'tuba', 'suona']
+
 
     def __len__(self):
         return len(self.samples)
@@ -122,11 +157,14 @@ class AVQA_dataset(Dataset):
         # start_time_ = time.time()
         sample = self.samples[idx]
         name = sample['video_id']
-        audio = np.load(os.path.join(self.audio_dir, name + '.npy'), mmap_mode='r')
+        items: Dict[str, str] = sample["items"]
+        # audio = np.load(os.path.join(self.audio_dir, name + '.npy'), mmap_mode='r')
+        audio = self.audio_data.setdefault(name, np.load(os.path.join(self.audio_dir, name + '.npy'), mmap_mode='r'))
         audio = audio[::6, :]
 
         # visual_out_res18_path = '/home/guangyao_li/dataset/avqa-features/visual_14x14'
-        visual_posi = np.load(os.path.join(self.video_res14x14_dir, name + '.npy'))  
+        # visual_posi = np.load(os.path.join(self.video_res14x14_dir, name + '.npy'))  
+        visual_posi = self.visual_data.setdefault(name, np.load(os.path.join(self.video_res14x14_dir, name + '.npy'), mmap_mode='r'))
 
         # visual_posi [60, 512, 14, 14], select 10 frames from one video
         visual_posi = visual_posi[::6, :]
@@ -147,7 +185,8 @@ class AVQA_dataset(Dataset):
 
             neg_video_name: str = self.video_list[neg_video_id]
 
-            visual_nega_out_res18: np.ndarray[Any] = np.load(os.path.join(self.video_res14x14_dir, neg_video_name + '.npy'), mmap_mode='r')
+            # visual_nega_out_res18: np.ndarray[Any] = np.load(os.path.join(self.video_res14x14_dir, neg_video_name + '.npy'), mmap_mode='r')
+            visual_nega_out_res18 = self.visual_data.setdefault(neg_video_name, np.load(os.path.join(self.video_res14x14_dir, neg_video_name + '.npy'), mmap_mode='r'))
             visual_nega_list.append(visual_nega_out_res18[neg_frame_flag,:,:,:])
         
         visual_nega: Any = np.stack(visual_nega_list, axis=0)
@@ -208,10 +247,10 @@ class AVQA_dataset(Dataset):
         # answer
         #start_time = time.time()
         answer = sample['anser']
-        label = ids_to_multinomial(answer, self.ans_vocab)
+        label = self.ids_to_multinomial(answer)
         label = torch.from_numpy(np.array(label)).long()
 
-        sample = {'audio': audio, 'visual_posi': visual_posi, 'visual_nega': visual_nega, 'question': ques, 'label': label}
+        sample = {'audio': audio, 'visual_posi': visual_posi, 'visual_nega': visual_nega, 'question': ques, 'label': label, 'items': items_to_embed(items)}
         # end_time = time.time()
         # print("load_vidual_anser", end_time - start_time)
         
@@ -222,6 +261,14 @@ class AVQA_dataset(Dataset):
         # print(f"{idx}: process all time: {end_time_ - start_time_}")
 
         return sample
+    
+    def items_to_embed(self, items: Dict[str, str]) -> np.ndarray:
+        res: np.ndarray = np.zeros(len(self.items))
+        for i, item in enumerate(self.items):
+            res[i] = items[item]
+        return res 
+            
+             
     
 
 def random_int(min_value: int=0, max_value: int=10000, filter_key: Callable[[int], bool]=lambda _: True) -> int:
@@ -239,6 +286,7 @@ class ToTensor(object):
         visual_posi = sample['visual_posi']
         visual_nega = sample['visual_nega']
         label = sample['label']
+        items = smaple["items"]
         # label = F.one_hot(sample['label'], num_classes=42)
 
         return { 
@@ -246,4 +294,5 @@ class ToTensor(object):
                 'visual_posi': sample['visual_posi'],
                 'visual_nega': sample['visual_nega'],
                 'question': sample['question'],
-                'label': label}
+                'label': label,
+                "items": torch.from_numpy(items)}

@@ -58,16 +58,15 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
         audio,visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
 
         optimizer.zero_grad()
-        out_qa, out_match_posi, out_match_nega, contrastive_loss = model(audio, visual_posi,visual_nega, question)  
-
-        out_match,match_label=batch_organize(out_match_posi,out_match_nega)  
-        out_match,match_label = out_match.type(torch.FloatTensor).cuda(), match_label.type(torch.LongTensor).cuda()
+        out_qa, out_match_posi, out_match_nega, avgn_loss = model(audio, visual_posi, visual_nega, question)  
+        out_match, match_label = batch_organize(out_match_posi, out_match_nega)  
+        out_match, match_label = out_match.type(torch.FloatTensor).cuda(), match_label.type(torch.LongTensor).cuda()
     
         # output.clamp_(min=1e-7, max=1 - 1e-7)
-        # loss_match = criterion(out_match,match_label)
+        loss_match = criterion(out_match, match_label)
         loss_qa = criterion(out_qa, target)
-        # loss = loss_qa + 0.5 * contrastive_loss
-        loss = loss_qa
+        loss = loss_qa + 0.5 * loss_match + 0.5 * avgn_loss
+        # loss = loss_qa + 0.5 * loss_match
 
 
         # writer.add_scalar('run/match',loss_match.item(), epoch * len(train_loader) + batch_idx)
@@ -210,9 +209,9 @@ def main():
     parser.add_argument(
         '--batch-size', type=int, default=32, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
-        '--epochs', type=int, default=30, metavar='N', help='number of epochs to train (default: 60)')
+        '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
-        '--lr', type=float, default=3e-3, metavar='LR', help='learning rate (default: 3e-4)')
+        '--lr', type=float, default=3e-4, metavar='LR', help='learning rate (default: 3e-4)')
     parser.add_argument(
         "--model", type=str, default='AVQA_Fusion_Net', help="with model to use")
     parser.add_argument(
@@ -226,7 +225,7 @@ def main():
     parser.add_argument(
         "--checkpoint", type=str, default='avst', help="save model name")
     parser.add_argument(
-        '--gpu', type=str, default='2', help='gpu device number')
+        '--gpu', type=str, default='1', help='gpu device number')
 
 
     args = parser.parse_args()

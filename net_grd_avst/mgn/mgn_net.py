@@ -33,7 +33,7 @@ class MGN_Net(nn.Module):
         self.audio_cug = ModalityTrans(
                             args.dim,
                             depth=args.depth_aud,
-                            num_heads=1,
+                            num_heads=8,
                             mlp_ratio=4.,
                             qkv_bias=True,
                             qk_scale=None,
@@ -52,7 +52,7 @@ class MGN_Net(nn.Module):
         self.visual_cug = ModalityTrans(
                             args.dim,
                             depth=args.depth_vis,
-                            num_heads=1,
+                            num_heads=8,
                             mlp_ratio=4.,
                             qkv_bias=True,
                             qk_scale=None,
@@ -72,7 +72,7 @@ class MGN_Net(nn.Module):
         self.av_mcg = ModalityTrans(
                             args.dim,
                             depth=args.depth_av,
-                            num_heads=1,
+                            num_heads=8,
                             mlp_ratio=4.,
                             qkv_bias=True,
                             qk_scale=None,
@@ -151,7 +151,6 @@ class MGN_Net(nn.Module):
         v_prob = torch.sigmoid(self.fc_prob_v(x2))                                # [B, 25, 1]
         v_frame_prob = (v_prob * attn_visual).permute(0, 2, 1)                    # [B, 10, 25]
         v_prob = v_prob.sum(dim=-1)                                               # [B, 25]
-
         return x1, x2, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob, a_attn, v_attn
 
 

@@ -127,6 +127,7 @@ class AVQA_Fusion_Net(nn.Module):
         # self.fc_text_future_map: nn.Linear = nn.Linear(512, 256)
         
         self.contrastive_loss = ContrastiveLoss()
+        self.cls_token_loss = ClsTokenLoss(22)
 
 
     def forward(self, audio, visual_posi, visual_nega, question):
@@ -234,8 +235,18 @@ class AVQA_Fusion_Net(nn.Module):
         feat = F.relu(self.fc3(feat))       # (256, 128)
         out_match = self.fc4(feat)     # (128, 2)
         
-        return grouped_audio_embedding, visual_feat_grd, out_match, self.contrastive_loss(aud_cls_prob, vis_cls_prob) + self.contrastive_loss(global_prob, a_prob, v_prob) + self.contrastive_loss(a_frame_prob, v_frame_prob)
+        return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(aud_cls_prob) + self.cls_token_loss(vis_cls_prob) + self.contrastive_loss(a_prob, v_prob)
+            # self.contrastive_loss(global_prob, a_prob, v_prob)
+            # + self.contrastive_loss(a_frame_prob, v_frame_prob)
     
+
+def ClsTokenLoss(num_class: int):
+    def cls_token_loss(cls_prob):
+        cls_target = torch.arange(0, num_class).long().to(cls_prob.device)
+        loss = F.cross_entropy(cls_prob, cls_target)
+        return loss
+    return cls_token_loss
+
 
 class ContrastiveLoss(nn.Module):
     def __init__(self, margin=0.5):
