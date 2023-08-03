@@ -165,6 +165,7 @@ data/
 # Log files 
 log/
 *.log
+*.txt
 
 # Pretrained models
 pretrained/
@@ -178,3 +179,6 @@ runs/
 
 # VS Code 
 .vscode/
+
+# Dump files 
+.nfs0008000004cb1c71000015b7

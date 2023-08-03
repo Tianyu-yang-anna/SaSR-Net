@@ -128,9 +128,10 @@ class AVQA_Fusion_Net(nn.Module):
         
         self.contrastive_loss = ContrastiveLoss()
         self.cls_token_loss = ClsTokenLoss(22)
+        self.cls_pred_loss = ClsPredLoss()
 
 
-    def forward(self, audio, visual_posi, visual_nega, question):
+    def forward(self, audio, visual_posi, visual_nega, question, cls_target=None):
         '''
             input question shape:    [B, T]
             input audio shape:       [B, T, C]
@@ -145,14 +146,14 @@ class AVQA_Fusion_Net(nn.Module):
         ###############################################################################################
         # visual posi
         
-        audio_feat_posi, visual_feat_grd_posi, out_match_posi, contrastive_loss_posi = self.out_match_infer(audio, visual_posi)
+        audio_feat_posi, visual_feat_grd_posi, out_match_posi, avgn_ce_loss_posi, avgn_bce_loss_v_posi, avgn_bce_loss_a_posi = self.out_match_infer(audio, visual_posi, cls_target)
         
         ###############################################################################################
 
         ###############################################################################################
         # visual nega
         
-        audio_feat_nega, visual_feat_grd_nega, out_match_nega, contrastive_loss_nega = self.out_match_infer(audio, visual_nega)
+        audio_feat_nega, visual_feat_grd_nega, out_match_nega, avgn_ce_loss_nega, avgn_bce_loss_v_nega, avgn_bce_loss_a_nega = self.out_match_infer(audio, visual_nega, cls_target)
 
         ###############################################################################################
 
@@ -186,9 +187,9 @@ class AVQA_Fusion_Net(nn.Module):
         combined_feature = self.tanh(combined_feature)
         out_qa = self.fc_ans(combined_feature)              # [batch_size, ans_vocab_size]
 
-        return out_qa, out_match_posi, out_match_nega, contrastive_loss_posi + contrastive_loss_nega
+        return out_qa, out_match_posi, out_match_nega, avgn_ce_loss_posi, avgn_bce_loss_v_posi, avgn_bce_loss_a_posi
 
-    def out_match_infer(self, audio, visual):
+    def out_match_infer(self, audio, visual, cls_target=None):
         
         ## audio features  [2*B*T, 128]
         audio_feat = F.relu(self.fc_a1(audio))
@@ -204,7 +205,7 @@ class AVQA_Fusion_Net(nn.Module):
         visual_feat_before_grounding = v_feat.squeeze()    # [B*T, C]
         visual_feat_before_grounding = visual_feat_before_grounding.view(B, -1, C)
         
-        _, _, aud_cls_prob, vis_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob, grouped_audio_embedding, grouped_visual_embedding = self.mgn(audio_feat, visual_feat_before_grounding, visual_feat_before_grounding)
+        _, _, av_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob, grouped_audio_embedding, grouped_visual_embedding = self.mgn(audio_feat, visual_feat_before_grounding, visual_feat_before_grounding)
         
         (B, C, H, W) = temp_visual.size()
         v_feat = temp_visual.view(B, C, H * W)                      # [B*T, C, HxW]
@@ -228,6 +229,10 @@ class AVQA_Fusion_Net(nn.Module):
         visual_feat_grd = self.fc_gl(visual_feat_grd)              # [B*T, C]
 
         grouped_audio_embedding = grouped_audio_embedding.flatten(0, 1)
+
+        #tianyu
+        #grouped_audio_embedding = torch.add(grouped_audio_embedding, audio_feat)
+
         feat = torch.cat((grouped_audio_embedding, visual_feat_grd), dim=-1)    # [B*T, C*2], [B*T, 1024]
 
         feat = F.relu(self.fc1(feat))       # (1024, 512)
@@ -235,10 +240,29 @@ class AVQA_Fusion_Net(nn.Module):
         feat = F.relu(self.fc3(feat))       # (256, 128)
         out_match = self.fc4(feat)     # (128, 2)
         
-        return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(aud_cls_prob) + self.cls_token_loss(vis_cls_prob) + self.contrastive_loss(a_prob, v_prob)
+
+        if cls_target is not None:
+            cls_pred_loss_v = self.cls_pred_loss(v_prob, cls_target)
+            cls_pred_loss_a = self.cls_pred_loss(a_prob, cls_target)
+            print("a_prob", a_prob)
+            print("v_prob", a_prob)
+            print("cls_target",cls_target)
+        else:
+            cls_pred_loss_v, cls_pred_loss_a = 0, 0
+        
+        print("av_cls_prob", av_cls_prob)
+        # return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(aud_cls_prob) + self.cls_token_loss(vis_cls_prob) + self.contrastive_loss(a_prob, v_prob) + cls_pred_loss
+        return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(av_cls_prob), cls_pred_loss_v, cls_pred_loss_a 
+
             # self.contrastive_loss(global_prob, a_prob, v_prob)
             # + self.contrastive_loss(a_frame_prob, v_frame_prob)
-    
+
+def ClsPredLoss():
+    def cls_pred_loss(prob, target):
+        loss = F.binary_cross_entropy(prob.float(), target.float())
+        return loss
+    return cls_pred_loss
+
 
 def ClsTokenLoss(num_class: int):
     def cls_token_loss(cls_prob):

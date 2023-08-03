@@ -3,6 +3,8 @@ import sys
 sys.path.append("/home/guangyao_li/projects/avqa/music_avqa_camera_ready") 
 import argparse
 import torch
+import numpy as np
+torch.set_printoptions(threshold=np.inf, edgeitems=120, linewidth=120)
 import torch.nn as nn
 import torch.optim as optim
 from dataloader_avst import *
@@ -55,23 +57,32 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
     correct_qa = 0
     #start_time = time.time()
     for batch_idx, sample in enumerate(train_loader):
-        audio,visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
+        audio, visual_posi,visual_nega, target, question, items = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda'), sample["items"].to("cuda")
 
         optimizer.zero_grad()
-        out_qa, out_match_posi, out_match_nega, avgn_loss = model(audio, visual_posi, visual_nega, question)  
+        out_qa, out_match_posi, out_match_nega, avgn_ce_loss, avgn_bce_loss_v, avgn_bce_loss_a = model(audio, visual_posi, visual_nega, question, items)  
+
         out_match, match_label = batch_organize(out_match_posi, out_match_nega)  
         out_match, match_label = out_match.type(torch.FloatTensor).cuda(), match_label.type(torch.LongTensor).cuda()
+
+        avgn_loss = avgn_ce_loss + avgn_bce_loss_v + avgn_bce_loss_a
     
         # output.clamp_(min=1e-7, max=1 - 1e-7)
-        loss_match = criterion(out_match, match_label)
+        #loss_match = criterion(out_match, match_label)
         loss_qa = criterion(out_qa, target)
-        loss = loss_qa + 0.5 * loss_match + 0.5 * avgn_loss
-        # loss = loss_qa + 0.5 * loss_match
-
-
-        # writer.add_scalar('run/match',loss_match.item(), epoch * len(train_loader) + batch_idx)
+        print("out_qa",out_qa)
+        print("target",target)
+        #loss = loss_qa + 0.5 * loss_match + 0.5 * avgn_loss
+        loss = loss_qa + 0.5 * 0.5 * avgn_loss
+        
+        #writer.add_scalar('run/match',loss_match.item(), epoch * len(train_loader) + batch_idx)
         writer.add_scalar('run/qa_test',loss_qa.item(), epoch * len(train_loader) + batch_idx)
+        writer.add_scalar('run/avgn_loss',avgn_loss.item(), epoch * len(train_loader) + batch_idx)
+        writer.add_scalar('run/avgn_ce_loss',avgn_ce_loss.item(), epoch * len(train_loader) + batch_idx)
+        writer.add_scalar('run/avgn_bce_loss_v',avgn_bce_loss_v.item(), epoch * len(train_loader) + batch_idx)
+        writer.add_scalar('run/avgn_bce_loss_a',avgn_bce_loss_a.item(), epoch * len(train_loader) + batch_idx)
         writer.add_scalar('run/both',loss.item(), epoch * len(train_loader) + batch_idx)
+
         #start_time = time.time()
         loss.backward()
         optimizer.step()
@@ -83,6 +94,7 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
             logging.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(audio), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), loss.item()))
+            
         #start_time = time.time()
         
 
@@ -96,14 +108,14 @@ def eval(model, val_loader,epoch):
         for batch_idx, sample in enumerate(val_loader):
             audio,visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
 
-            out_qa, out_match_posi, out_match_nega, contrastive_loss = model(audio, visual_posi,visual_nega, question)
+            out_qa, out_match_posi, out_match_nega, _, _, _ = model(audio, visual_posi,visual_nega, question)
 
             _, predicted = torch.max(out_qa.data, 1)
             total_qa += out_qa.size(0)
             correct_qa += (predicted == target).sum().item()
 
     logging.info('Accuracy qa: %.2f %%' % (100 * correct_qa / total_qa))
-    writer.add_scalar('metric/acc_qa',100 * correct_qa / total_qa, epoch)
+    writer.add_scalar('metri_qa',100 * correct_qa / total_qa, epoch)
 
     return 100 * correct_qa / total_qa
 
@@ -124,9 +136,9 @@ def test(model, val_loader):
     AV_temp = []
     with torch.no_grad():
         for batch_idx, sample in enumerate(val_loader):
-            audio,visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
-
-            preds_qa,out_match_posi,out_match_nega = model(audio, visual_posi,visual_nega, question)
+            audio, visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
+            
+            preds_qa,out_match_posi,out_match_nega,_,_,_ = model(audio, visual_posi,visual_nega, question)
             preds = preds_qa
             _, predicted = torch.max(preds.data, 1)
 
@@ -201,13 +213,13 @@ def main():
         "--video_res14x14_dir", type=str, default='/home/guangyao_li/dataset/avqa-features/visual_14x14', help="res14x14 dir")
     
     parser.add_argument(
-        "--label_train", type=str, default="./data/json/avqa-train.json", help="train csv file")
+        "--label_train", type=str, default="./data/json/avqa-train-updated.json", help="train csv file")
     parser.add_argument(
         "--label_val", type=str, default="./data/json/avqa-val.json", help="val csv file")
     parser.add_argument(
         "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
     parser.add_argument(
-        '--batch-size', type=int, default=32, metavar='N', help='input batch size for training (default: 16)')
+        '--batch-size', type=int, default=64, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
         '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
@@ -225,7 +237,7 @@ def main():
     parser.add_argument(
         "--checkpoint", type=str, default='avst', help="save model name")
     parser.add_argument(
-        '--gpu', type=str, default='1', help='gpu device number')
+        '--gpu', type=str, default='2', help='gpu device number')
 
 
     args = parser.parse_args()

@@ -99,6 +99,8 @@ class AVQA_dataset(Dataset):
 
     def __init__(self, label, audio_dir, video_res14x14_dir, transform=None, mode_flag='train'):
   
+        self.train: bool = mode_flag == "train"
+        
         samples = json.load(open('./data/json/avqa-train.json', 'r'))
 
         # nax =  nne
@@ -157,7 +159,12 @@ class AVQA_dataset(Dataset):
         # start_time_ = time.time()
         sample = self.samples[idx]
         name = sample['video_id']
-        items: Dict[str, str] = sample["items"]
+        
+        if self.train:
+            items: Dict[str, str] = sample["items"]
+        else:
+            items = {}
+            
         # audio = np.load(os.path.join(self.audio_dir, name + '.npy'), mmap_mode='r')
         audio = self.audio_data.setdefault(name, np.load(os.path.join(self.audio_dir, name + '.npy'), mmap_mode='r'))
         audio = audio[::6, :]
@@ -173,7 +180,7 @@ class AVQA_dataset(Dataset):
         # neg_frame_ids: np.ndarray[int] = np.random.choice(valid_frame_ids, size=visual_posi.shape[0], replace=False)
         neg_frame_ids: List[int] = [random_int(0, self.video_len - 1, lambda x: x // 60 != video_idx) for _ in range(visual_posi.shape[0])]
 
-        start_time = time.time()
+        #start_time = time.time()
         
         visual_nega_list: List[np.ndarray[int]] = []
         
@@ -250,7 +257,7 @@ class AVQA_dataset(Dataset):
         label = self.ids_to_multinomial(answer)
         label = torch.from_numpy(np.array(label)).long()
 
-        sample = {'audio': audio, 'visual_posi': visual_posi, 'visual_nega': visual_nega, 'question': ques, 'label': label, 'items': items_to_embed(items)}
+        sample = {'audio': audio, 'visual_posi': visual_posi, 'visual_nega': visual_nega, 'question': ques, 'label': label, 'items': self.items_to_embed(items)}
         # end_time = time.time()
         # print("load_vidual_anser", end_time - start_time)
         
@@ -265,7 +272,7 @@ class AVQA_dataset(Dataset):
     def items_to_embed(self, items: Dict[str, str]) -> np.ndarray:
         res: np.ndarray = np.zeros(len(self.items))
         for i, item in enumerate(self.items):
-            res[i] = items[item]
+            res[i] = items.get(item, 0)
         return res 
             
              
@@ -286,13 +293,13 @@ class ToTensor(object):
         visual_posi = sample['visual_posi']
         visual_nega = sample['visual_nega']
         label = sample['label']
-        items = smaple["items"]
+        items = sample["items"]
         # label = F.one_hot(sample['label'], num_classes=42)
 
         return { 
-                'audio': torch.from_numpy(audio), 
-                'visual_posi': sample['visual_posi'],
-                'visual_nega': sample['visual_nega'],
-                'question': sample['question'],
-                'label': label,
-                "items": torch.from_numpy(items)}
+            'audio': torch.from_numpy(audio), 
+            'visual_posi': sample['visual_posi'],
+            'visual_nega': sample['visual_nega'],
+            'question': sample['question'],
+            'label': label,
+            "items": torch.from_numpy(items)}
