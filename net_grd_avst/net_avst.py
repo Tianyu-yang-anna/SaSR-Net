@@ -244,13 +244,13 @@ class AVQA_Fusion_Net(nn.Module):
         if cls_target is not None:
             cls_pred_loss_v = self.cls_pred_loss(v_prob, cls_target)
             cls_pred_loss_a = self.cls_pred_loss(a_prob, cls_target)
-            print("a_prob", a_prob)
-            print("v_prob", a_prob)
-            print("cls_target",cls_target)
+            #print("a_prob", a_prob)
+            #print("v_prob", a_prob)
+            #print("cls_target",cls_target)
         else:
             cls_pred_loss_v, cls_pred_loss_a = 0, 0
         
-        print("av_cls_prob", av_cls_prob)
+        #print("av_cls_prob", av_cls_prob)
         # return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(aud_cls_prob) + self.cls_token_loss(vis_cls_prob) + self.contrastive_loss(a_prob, v_prob) + cls_pred_loss
         return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(av_cls_prob), cls_pred_loss_v, cls_pred_loss_a 
 

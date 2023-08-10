@@ -42,7 +42,7 @@ class MGN_Net(nn.Module):
                             drop_path=0.1,
                             norm_layer=nn.LayerNorm,
                             out_dim_grouping=args.dim,
-                            num_heads_grouping=1,
+                            num_heads_grouping=8,
                             num_group_tokens=22,
                             num_output_groups=22,
                             hard_assignment=unimodal_hard_assignment,
@@ -62,7 +62,7 @@ class MGN_Net(nn.Module):
                             drop_path=0.1,
                             norm_layer=nn.LayerNorm,
                             out_dim_grouping=args.dim,
-                            num_heads_grouping=1,
+                            num_heads_grouping=8,
                             num_group_tokens=22,
                             num_output_groups=22,
                             hard_assignment=unimodal_hard_assignment,
@@ -70,24 +70,24 @@ class MGN_Net(nn.Module):
                         )
 
         # modality cross-modal grouping
-        self.av_mcg = ModalityTrans(
-                            args.dim,
-                            depth=args.depth_av,
-                            num_heads=8,
-                            mlp_ratio=4.,
-                            qkv_bias=True,
-                            qk_scale=None,
-                            drop=0.,
-                            attn_drop=0.,
-                            drop_path=0.1,
-                            norm_layer=nn.LayerNorm,
-                            out_dim_grouping=args.dim,
-                            num_heads_grouping=1,
-                            num_group_tokens=22,
-                            num_output_groups=22,
-                            hard_assignment=crossmodal_hard_assignment,
-                            use_han=False                        
-                        )
+        # self.av_mcg = ModalityTrans(
+        #                     args.dim,
+        #                     depth=args.depth_av,
+        #                     num_heads=8,
+        #                     mlp_ratio=4.,
+        #                     qkv_bias=True,
+        #                     qk_scale=None,
+        #                     drop=0.,
+        #                     attn_drop=0.,
+        #                     drop_path=0.1,
+        #                     norm_layer=nn.LayerNorm,
+        #                     out_dim_grouping=args.dim,
+        #                     num_heads_grouping=1,
+        #                     num_group_tokens=22,
+        #                     num_output_groups=22,
+        #                     hard_assignment=crossmodal_hard_assignment,
+        #                     use_han=False                        
+        #                 )
 
         # prediction
         self.fc_prob = nn.Linear(args.dim, 1)
@@ -129,11 +129,12 @@ class MGN_Net(nn.Module):
         x1, attn_audio_dict, a_attn = self.audio_cug(x1_0, self.av_token, x2_0, return_attn=True)
 
         # modality-aware cross-modal grouping
-        x, _, _ = self.av_mcg(x1, x2, return_attn=True)
+        # x, _, _ = self.av_mcg(x1, x2, return_attn=True)
 
         # prediction
-        av_prob = torch.sigmoid(self.fc_prob(x))                                # [B, 25, 1]
-        global_prob = av_prob.sum(dim=-1)                                       # [B, 25]
+        # av_prob = torch.sigmoid(self.fc_prob(x))                                # [B, 25, 1]
+        # global_prob = av_prob.sum(dim=-1)                                       # [B, 25]
+        global_prob = 0
 
         # cls token prediction
         av_cls_prob = self.fc_cls(self.av_token)                            # [25, 25]

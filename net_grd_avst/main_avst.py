@@ -68,14 +68,14 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
         avgn_loss = avgn_ce_loss + avgn_bce_loss_v + avgn_bce_loss_a
     
         # output.clamp_(min=1e-7, max=1 - 1e-7)
-        #loss_match = criterion(out_match, match_label)
+        loss_match = criterion(out_match, match_label)
         loss_qa = criterion(out_qa, target)
-        print("out_qa",out_qa)
-        print("target",target)
-        #loss = loss_qa + 0.5 * loss_match + 0.5 * avgn_loss
-        loss = loss_qa + 0.5 * 0.5 * avgn_loss
+        #print("out_qa",out_qa)
+        #print("target",target)
+        loss = loss_qa + 0.1 * loss_match + avgn_loss
+        #loss = loss_qa +  0.5 * avgn_loss
         
-        #writer.add_scalar('run/match',loss_match.item(), epoch * len(train_loader) + batch_idx)
+        writer.add_scalar('run/match',loss_match.item(), epoch * len(train_loader) + batch_idx)
         writer.add_scalar('run/qa_test',loss_qa.item(), epoch * len(train_loader) + batch_idx)
         writer.add_scalar('run/avgn_loss',avgn_loss.item(), epoch * len(train_loader) + batch_idx)
         writer.add_scalar('run/avgn_ce_loss',avgn_ce_loss.item(), epoch * len(train_loader) + batch_idx)
@@ -83,19 +83,14 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
         writer.add_scalar('run/avgn_bce_loss_a',avgn_bce_loss_a.item(), epoch * len(train_loader) + batch_idx)
         writer.add_scalar('run/both',loss.item(), epoch * len(train_loader) + batch_idx)
 
-        #start_time = time.time()
+
         loss.backward()
         optimizer.step()
-        #end_time = time.time()
-        #logging.debug("backward_time=", end_time - start_time)
-        #end_time = time.time()
-        #logging.debug("step_time=", end_time - start_time)
         if batch_idx % args.log_interval == 0:
             logging.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(audio), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), loss.item()))
-            
-        #start_time = time.time()
+
         
 
 def eval(model, val_loader,epoch):
@@ -223,7 +218,7 @@ def main():
     parser.add_argument(
         '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
-        '--lr', type=float, default=3e-4, metavar='LR', help='learning rate (default: 3e-4)')
+        '--lr', type=float, default=1e-4, metavar='LR', help='learning rate (default: 3e-4)')
     parser.add_argument(
         "--model", type=str, default='AVQA_Fusion_Net', help="with model to use")
     parser.add_argument(
