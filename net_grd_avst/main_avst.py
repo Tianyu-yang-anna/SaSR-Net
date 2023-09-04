@@ -13,6 +13,8 @@ import ast
 import json
 import numpy as np
 import pdb
+import cv2 
+import itertools
 # from .net_avst import AVQA_Fusion_Net
 
 import warnings
@@ -60,7 +62,7 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
         audio, visual_posi,visual_nega, target, question, items = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda'), sample["items"].to("cuda")
 
         optimizer.zero_grad()
-        out_qa, out_match_posi, out_match_nega, avgn_ce_loss, avgn_bce_loss_v, avgn_bce_loss_a = model(audio, visual_posi, visual_nega, question, items)  
+        out_qa, out_match_posi, out_match_nega, avgn_ce_loss, avgn_bce_loss_v, avgn_bce_loss_a, _ = model(audio, visual_posi, visual_nega, question, items)  
 
         out_match, match_label = batch_organize(out_match_posi, out_match_nega)  
         out_match, match_label = out_match.type(torch.FloatTensor).cuda(), match_label.type(torch.LongTensor).cuda()
@@ -72,7 +74,7 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
         loss_qa = criterion(out_qa, target)
         #print("out_qa",out_qa)
         #print("target",target)
-        loss = loss_qa + 0.1 * loss_match + avgn_loss
+        loss = loss_qa + 0.5 * loss_match + 0.5 * avgn_loss
         #loss = loss_qa +  0.5 * avgn_loss
         
         writer.add_scalar('run/match',loss_match.item(), epoch * len(train_loader) + batch_idx)
@@ -101,9 +103,9 @@ def eval(model, val_loader,epoch):
     correct_match=0
     with torch.no_grad():
         for batch_idx, sample in enumerate(val_loader):
-            audio,visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
+            audio, visual_posi,visual_nega, target, question, items = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda'), sample["items"].to("cuda")
 
-            out_qa, out_match_posi, out_match_nega, _, _, _ = model(audio, visual_posi,visual_nega, question)
+            out_qa, out_match_posi, out_match_nega, _, _, _, _ = model(audio, visual_posi,visual_nega, question)
 
             _, predicted = torch.max(out_qa.data, 1)
             total_qa += out_qa.size(0)
@@ -131,9 +133,9 @@ def test(model, val_loader):
     AV_temp = []
     with torch.no_grad():
         for batch_idx, sample in enumerate(val_loader):
-            audio, visual_posi,visual_nega, target, question = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
+            audio, visual_posi,visual_nega, target, question, items = sample['audio'].to('cuda'), sample['visual_posi'].to('cuda'),sample['visual_nega'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda'), sample["items"].to("cuda")
             
-            preds_qa,out_match_posi,out_match_nega,_,_,_ = model(audio, visual_posi,visual_nega, question)
+            preds_qa,out_match_posi,out_match_nega,_,_,_,_ = model(audio, visual_posi,visual_nega, question)
             preds = preds_qa
             _, predicted = torch.max(preds.data, 1)
 
@@ -196,6 +198,62 @@ def test(model, val_loader):
 
     return 100 * correct / total
 
+
+def visualize(model, val_loader):
+    from visual_net import resnet18
+    visual_net = resnet18(pretrained=True)
+    model.eval()
+    total = 0
+    correct = 0
+    with torch.no_grad():
+        for batch_idx, sample in enumerate(val_loader):
+            print(sample.keys())
+            audio, visual_posi, visual_nega, target, question = sample['audio'].to('cuda'), sample['video_s'].to('cuda'),sample['video_s'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
+            video_id = sample['video_id']
+            video_org = sample['pos_frame_org']
+            
+            visual_posi = visual_net(visual_net)
+            print(video_org.shape)
+            _, _, _, _, _, _, av_atten = model(audio, visual_posi,visual_nega, question)
+
+            print("\n\nvideo name: ", video_id)
+            # print("video_org type: ", type(video_org))
+
+            # 正负样本交替的, 隔一个取一个mask
+            obj_localization = av_atten.detach().cpu().numpy()  # (2, 1, 196)
+            obj_localization = obj_localization[::2]            # (1, 1, 196)
+
+            posi_img_data = video_org                            # [1, 3, 224, 224]
+
+            obj_len = obj_localization.shape[0]
+            print("obj_len: ", obj_len)
+            for j in range(obj_len):
+                print("obj: ", obj_localization.shape)
+                map = obj_localization[j, :, :].squeeze()
+
+                print("map: ", map.shape)
+                map = (map-map.min()) / (map.max()-map.min())
+                map=cv2.resize(map.reshape(14,14),(224,224))
+                map=map/map.max()
+                map=np.uint8(map*255)
+                heatmap = cv2.applyColorMap(map, cv2.COLORMAP_JET)
+
+                print("map type: ", type(map))
+
+                current_img = posi_img_data[j].cpu().numpy()
+                print("current_img type: ", type(current_img))
+                current_img = cv2.resize(current_img, (224, 224))
+                print("current_img: ", current_img.shape)
+
+                result = heatmap * 0.4 + current_img * 0.6
+ 
+                file_name = '%04d_' % batch_idx + '%04d_0' % j + '.jpg'
+                print("file_name: ", file_name)
+                if not os.path.exists('net_grd_avst/models_grd_vis/vis_h4_c6'):
+                    os.makedirs('net_grd_avst/models_grd_vis/vis_h4_c6', exist_ok=True)
+                cv2.imwrite(os.path.join('net_grd_avst/models_grd_vis/vis_h4_c6', file_name), result)
+                
+
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch Implementation of Audio-Visual Question Answering')
@@ -214,7 +272,9 @@ def main():
     parser.add_argument(
         "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
     parser.add_argument(
-        '--batch-size', type=int, default=64, metavar='N', help='input batch size for training (default: 16)')
+        "--label_visualization", type=str, default="./data/json/avqa-val_real.json", help="visualization csv file")
+    parser.add_argument(
+        '--batch-size', type=int, default=16, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
         '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
@@ -232,7 +292,7 @@ def main():
     parser.add_argument(
         "--checkpoint", type=str, default='avst', help="save model name")
     parser.add_argument(
-        '--gpu', type=str, default='2', help='gpu device number')
+        '--gpu', type=str, default='1', help='gpu device number')
 
 
     args = parser.parse_args()
@@ -259,34 +319,60 @@ def main():
 
         # ===================================== load pretrained model ===============================================
         ####### concat model
-        # pretrained_file = "grounding_gen/models_grounding_gen/main_grounding_gen_best.pt"
-        # checkpoint = torch.load(pretrained_file)
+        pretrained_file = "grounding_gen/models_grounding_gen/main_grounding_gen_best.pt"
+        checkpoint = torch.load(pretrained_file)
         logging.info("\n-------------- loading pretrained models --------------")
-        # model_dict = model.state_dict()
+        model_dict = model.state_dict()
+        
         # tmp = ['module.fc_a1.weight', 'module.fc_a1.bias','module.fc_a2.weight','module.fc_a2.bias','module.fc_gl.weight','module.fc_gl.bias','module.fc1.weight', 'module.fc1.bias','module.fc2.weight', 'module.fc2.bias','module.fc3.weight', 'module.fc3.bias','module.fc4.weight', 'module.fc4.bias']
         # tmp2 = ['module.fc_a1.weight', 'module.fc_a1.bias','module.fc_a2.weight','module.fc_a2.bias']
         # pretrained_dict1 = {k: v for k, v in checkpoint.items() if k in tmp}
         # pretrained_dict2 = {str(k).split('.')[0]+'.'+str(k).split('.')[1]+'_pure.'+str(k).split('.')[-1]: v for k, v in checkpoint.items() if k in tmp2}
-
-        # model_dict.update(pretrained_dict1) 
-        # model_dict.update(pretrained_dict2) 
-        # model.load_state_dict(model_dict)
+        
+        for key, value in checkpoint.items():
+            potential_key = '.'.join(key.split('.')[1:])
+            if potential_key in model_dict:
+                model_dict[potential_key] = value 
+                logging.info("Successfully load layer {potential_key}.")
+        model.load_state_dict(model_dict)
 
         logging.info("\n-------------- load pretrained models --------------")
 
         # ===================================== load pretrained model ===============================================
 
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=8, gamma=0.1)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=16, gamma=0.1)
         criterion = nn.CrossEntropyLoss()
-        best_F = 0
+        best_acc = 0
         for epoch in range(1, args.epochs + 1):
             train(args, model, train_loader, optimizer, criterion, epoch=epoch)
             scheduler.step(epoch)
-            F = eval(model, val_loader, epoch)
-            if F >= best_F:
-                best_F = F
+            logging.info(f"Current learning rate: {optimizer.param_groups[0]['lr']}")
+            acc = eval(model, val_loader, epoch)
+            if acc >= best_acc:
+                best_acc = acc
                 torch.save(model.state_dict(), args.model_save_dir + args.checkpoint + ".pt")
+                logging.info(f"Checkpoint epoch {epoch} acc {acc} has been saved.")
+                
+    elif args.mode == "visualize":
+        val_dataset = AVQADatasetVis(label_data=args.label_visualization, audio_dir=args.audio_dir, video_dir=args.video_res14x14_dir)
+        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True)
+
+
+        # ===================================== load pretrained model ===============================================
+        logging.info("\n-------------- loading pretrained models --------------")
+        
+        pretrained_file = "net_grd_avst/avst_models/avst.pt"
+        checkpoint = torch.load(pretrained_file)
+        
+        model.load_state_dict(checkpoint)
+        model.eval() 
+
+        logging.info("\n-------------- load pretrained models --------------")
+
+        # ===================================== load pretrained model ===============================================
+
+        visualize(model, val_loader)
 
     else:
         test_dataset = AVQA_dataset(label=args.label_test, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,

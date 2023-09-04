@@ -146,14 +146,14 @@ class AVQA_Fusion_Net(nn.Module):
         ###############################################################################################
         # visual posi
         
-        audio_feat_posi, visual_feat_grd_posi, out_match_posi, avgn_ce_loss_posi, avgn_bce_loss_v_posi, avgn_bce_loss_a_posi = self.out_match_infer(audio, visual_posi, cls_target)
+        audio_feat_posi, visual_feat_grd_posi, out_match_posi, avgn_ce_loss_posi, avgn_bce_loss_v_posi, avgn_bce_loss_a_posi, mask = self.out_match_infer(audio, visual_posi, cls_target)
         
         ###############################################################################################
 
         ###############################################################################################
         # visual nega
         
-        audio_feat_nega, visual_feat_grd_nega, out_match_nega, avgn_ce_loss_nega, avgn_bce_loss_v_nega, avgn_bce_loss_a_nega = self.out_match_infer(audio, visual_nega, cls_target)
+        audio_feat_nega, visual_feat_grd_nega, out_match_nega, avgn_ce_loss_nega, avgn_bce_loss_v_nega, avgn_bce_loss_a_nega, mask = self.out_match_infer(audio, visual_nega, cls_target)
 
         ###############################################################################################
 
@@ -187,7 +187,7 @@ class AVQA_Fusion_Net(nn.Module):
         combined_feature = self.tanh(combined_feature)
         out_qa = self.fc_ans(combined_feature)              # [batch_size, ans_vocab_size]
 
-        return out_qa, out_match_posi, out_match_nega, avgn_ce_loss_posi, avgn_bce_loss_v_posi, avgn_bce_loss_a_posi
+        return out_qa, out_match_posi, out_match_nega, avgn_ce_loss_posi, avgn_bce_loss_v_posi, avgn_bce_loss_a_posi, mask
 
     def out_match_infer(self, audio, visual, cls_target=None):
         
@@ -204,7 +204,7 @@ class AVQA_Fusion_Net(nn.Module):
         v_feat = self.avgpool(temp_visual)                      # [B*T, C, 1, 1]
         visual_feat_before_grounding = v_feat.squeeze()    # [B*T, C]
         visual_feat_before_grounding = visual_feat_before_grounding.view(B, -1, C)
-        
+
         _, _, av_cls_prob, global_prob, a_prob, v_prob, a_frame_prob, v_frame_prob, grouped_audio_embedding, grouped_visual_embedding = self.mgn(audio_feat, visual_feat_before_grounding, visual_feat_before_grounding)
         
         (B, C, H, W) = temp_visual.size()
@@ -252,7 +252,7 @@ class AVQA_Fusion_Net(nn.Module):
         
         #print("av_cls_prob", av_cls_prob)
         # return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(aud_cls_prob) + self.cls_token_loss(vis_cls_prob) + self.contrastive_loss(a_prob, v_prob) + cls_pred_loss
-        return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(av_cls_prob), cls_pred_loss_v, cls_pred_loss_a 
+        return grouped_audio_embedding, visual_feat_grd, out_match, self.cls_token_loss(av_cls_prob), cls_pred_loss_v, cls_pred_loss_a, x2_p
 
             # self.contrastive_loss(global_prob, a_prob, v_prob)
             # + self.contrastive_loss(a_frame_prob, v_frame_prob)

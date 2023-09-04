@@ -20,49 +20,6 @@ from collections import OrderedDict
 T = TypeVar('T')
 S = TypeVar('S')
 
-# def TransformImage(img):
-
-#     transform_list = []
-#     mean = [0.43216, 0.394666, 0.37645]
-#     std = [0.22803, 0.22145, 0.216989]
-
-#     transform_list.append(transforms.Resize([224,224]))
-#     transform_list.append(transforms.ToTensor())
-#     transform_list.append(transforms.Normalize(mean, std))
-#     trans = transforms.Compose(transform_list)
-#     frame_tensor = trans(img)
-    
-#     return frame_tensor
-
-
-# def load_frame_info(img_path):
-
-#     img = Image.open(img_path).convert('RGB')
-#     frame_tensor = TransformImage(img)
-
-#     return frame_tensor
-
-
-# def image_info(video_name):
-
-#     path = "/home/guangyao_li/dataset/avqa/avqa-frames-8fps"
-#     img_path = os.path.join(path, video_name)
-
-#     img_list = os.listdir(img_path)
-#     img_list.sort()
-
-#     select_img = []
-#     for frame_idx in range(0,len(img_list),8):
-#         if frame_idx < 475:
-#             video_frames_path = os.path.join(img_path, str(frame_idx+1).zfill(6)+".jpg")
-
-#             frame_tensor_info = load_frame_info(video_frames_path)
-#             select_img.append(frame_tensor_info.cpu().numpy())
-
-#     select_img = np.array(select_img)
-
-#     return select_img
-
 
 class LRU_cache(Generic[T, S]):
     def __init__(self, max_size: Optional[int]=None) -> None:
@@ -101,7 +58,8 @@ class AVQA_dataset(Dataset):
   
         self.train: bool = mode_flag == "train"
         
-        samples = json.load(open('./data/json/avqa-train.json', 'r'))
+        with open('./data/json/avqa-train.json', 'r') as f:
+            samples = json.load(f)
 
         # nax =  nne
         ques_vocab = ['<pad>']
@@ -198,39 +156,6 @@ class AVQA_dataset(Dataset):
         
         visual_nega: Any = np.stack(visual_nega_list, axis=0)
         visual_nega: Any = torch.from_numpy(visual_nega)
-        # for i in range(visual_posi.shape[0]):
-        #     while(1):
-        #         neg_frame_id = random.randint(0, self.video_len - 1)
-        #         if (int(neg_frame_id/60) != video_idx):
-        #             break
-
-        #     neg_video_id = int(neg_frame_id / 60)
-        #     neg_frame_flag = neg_frame_id % 60
-
-        #     neg_video_name = self.video_list[neg_video_id]
-
-        #     visual_nega_out_res18=np.load(os.path.join(self.video_res14x14_dir, neg_video_name + '.npy'))
-        #     visual_nega_out_res18 = torch.from_numpy(visual_nega_out_res18)
-
-        #     visual_nega_clip=visual_nega_out_res18[neg_frame_flag,:,:,:].unsqueeze(0)
-
-        #     if(i==0):
-        #         visual_nega=visual_nega_clip
-        #     else:
-        #         visual_nega=torch.cat((visual_nega,visual_nega_clip),dim=0)
-
-        
-        # end_time = time.time()
-        # print(f"{idx}: process video time: {end_time - start_time}")
-        #end_time = time.time()
-        # print("load_vidual_neg", end_time - start_time)
-        # print("load_visual_neg_1", load_vidual_neg_1)
-        # print("load_visual_neg_2", load_vidual_neg_2)
-        # print("load_visual_neg_3", load_vidual_neg_3)
-        # print("load_visual_neg_4", load_vidual_neg_4)
-        # print("load_visual_neg_5", load_vidual_neg_5)
-        # print("load_visual_neg_6", load_vidual_neg_6)
-
 
         # visual nega [60, 512, 14, 14]
 
@@ -275,75 +200,6 @@ class AVQA_dataset(Dataset):
             res[i] = items.get(item, 0)
         return res 
             
-
-class AVQADatasetVis(Dataset):
-
-    def __init__(self, label_data, audio_dir, video_dir, transform=None):
-        with open('./data/json/avqa-train_real.json', 'r') as f:
-            samples = json.load(f)
-
-        self.samples = json.load(open(label_data, 'r'))
-
-        video_list = []
-        for sample in samples:
-            video_name = sample['video_id']
-            if video_name not in video_list:
-                video_list.append(video_name)
-
-        self.video_list = video_list
-        self.audio_len = 10 * len(video_list)
-        self.video_len = 10 * len(video_list)
-
-        self.audio_dir = audio_dir
-        self.video_dir = video_dir
-        self.transform = transform
-
-        self.max_len = 14
-    
-    def __len__(self):
-        return self.video_len
-
-    def __getitem__(self, idx):
-
-        pos_frame_id = idx
-        pos_video_id = int(idx / 10)
-        pos_frame_flag = idx % 10
-        pos_video_name = self.video_list[pos_video_id]
-
-        while(1):
-            neg_frame_id = random.randint(0, self.video_len - 1)
-            if int(neg_frame_id/10) != int(pos_frame_id/10):
-                break
-        neg_video_id = int(neg_frame_id / 10)
-        neg_frame_flag = neg_frame_id % 10
-        neg_video_name = self.video_list[neg_video_id]
-
-        aud_frame_id = pos_frame_id
-        aud_id = pos_video_id
-        aud_flag = pos_frame_flag
-
-        pos_frame_org, pos_frame = image_info(pos_video_name, pos_frame_flag)
-        neg_frame_org, neg_frame = image_info(neg_video_name, neg_frame_flag)
-
-        pos_frame = torch.Tensor(pos_frame).unsqueeze(0)
-        neg_frame = torch.Tensor(neg_frame).unsqueeze(0)
-
-        sec_audio = torch.Tensor(audio_info(self.audio_dir, pos_video_name, aud_flag)).unsqueeze(0)
-
-        video_s = torch.cat((pos_frame, neg_frame), dim=0)
-        audio = torch.cat((sec_audio, sec_audio), dim=0)
-
-        label  = torch.Tensor(np.array([1, 0]))
-        
-        ques = torch.zeros(512, dtype=torch.long)
-
-        video_id = pos_video_name
-        sample = {'video_id':video_id, 'audio': audio, 'pos_frame_org':pos_frame_org, 'video_s': video_s, 'label': label, 'question': ques}
-
-        if self.transform:
-            sample = self.transform(sample)
-
-        return sample
              
     
 
@@ -354,7 +210,7 @@ def random_int(min_value: int=0, max_value: int=10000, filter_key: Callable[[int
             return i
         
 
-class ToTensor:
+class ToTensor(object):
 
     def __call__(self, sample):
 
@@ -372,51 +228,3 @@ class ToTensor:
             'question': sample['question'],
             'label': label,
             "items": torch.from_numpy(items)}
-        
-        
-def TransformImage(img):
-
-    transform_list = []
-    mean = [0.43216, 0.394666, 0.37645]
-    std = [0.22803, 0.22145, 0.216989]
-
-    transform_list.append(transforms.Resize([224,224]))
-    transform_list.append(transforms.ToTensor())
-    transform_list.append(transforms.Normalize(mean, std))
-    trans = transforms.Compose(transform_list)
-    frame_tensor = trans(img)
-    
-    return frame_tensor
-
-
-def load_frame_info(img_path, img_file):
-
-    img_info = os.path.join(img_path, img_file)
-    img = Image.open(img_info).convert('RGB')
-    frame_tensor = TransformImage(img)
-
-    return img, frame_tensor
-
-
-def image_info(video_name, frame_flag):
-
-    # path = "./data/frames-8fps"
-    path = "./data/frames"
-    img_path = os.path.join(path, video_name)
-
-    img_list = os.listdir(img_path)
-    img_list.sort()
-
-    frame_idx = img_list[0 + frame_flag]
-    img_org, img_tensor = load_frame_info(img_path, frame_idx)
-    select_img = img_tensor.cpu().numpy()
-    img_org = np.array(img_org)
-
-    return img_org, select_img
-
-def audio_info(audio_dir, audeo_name, aud_flag):
-
-    audio = np.load(os.path.join(audio_dir, audeo_name + '.npy'))
-    select_aud = audio[aud_flag]
-
-    return select_aud
