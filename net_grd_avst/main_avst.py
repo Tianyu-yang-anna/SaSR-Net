@@ -199,59 +199,59 @@ def test(model, val_loader):
     return 100 * correct / total
 
 
-def visualize(model, val_loader):
-    from visual_net import resnet18
-    visual_net = resnet18(pretrained=True)
-    model.eval()
-    total = 0
-    correct = 0
-    with torch.no_grad():
-        for batch_idx, sample in enumerate(val_loader):
-            print(sample.keys())
-            audio, visual_posi, visual_nega, target, question = sample['audio'].to('cuda'), sample['video_s'].to('cuda'),sample['video_s'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
-            video_id = sample['video_id']
-            video_org = sample['pos_frame_org']
+# def visualize(model, val_loader):
+#     from visual_net import resnet18
+#     visual_net = resnet18(pretrained=True)
+#     model.eval()
+#     total = 0
+#     correct = 0
+#     with torch.no_grad():
+#         for batch_idx, sample in enumerate(val_loader):
+#             print(sample.keys())
+#             audio, visual_posi, visual_nega, target, question = sample['audio'].to('cuda'), sample['video_s'].to('cuda'),sample['video_s'].to('cuda'), sample['label'].to('cuda'), sample['question'].to('cuda')
+#             video_id = sample['video_id']
+#             video_org = sample['pos_frame_org']
             
-            visual_posi = visual_net(visual_net)
-            print(video_org.shape)
-            _, _, _, _, _, _, av_atten = model(audio, visual_posi,visual_nega, question)
+#             visual_posi = visual_net(visual_net)
+#             print(video_org.shape)
+#             _, _, _, _, _, _, av_atten = model(audio, visual_posi,visual_nega, question)
 
-            print("\n\nvideo name: ", video_id)
-            # print("video_org type: ", type(video_org))
+#             print("\n\nvideo name: ", video_id)
+#             # print("video_org type: ", type(video_org))
 
-            # 正负样本交替的, 隔一个取一个mask
-            obj_localization = av_atten.detach().cpu().numpy()  # (2, 1, 196)
-            obj_localization = obj_localization[::2]            # (1, 1, 196)
+#             # 正负样本交替的, 隔一个取一个mask
+#             obj_localization = av_atten.detach().cpu().numpy()  # (2, 1, 196)
+#             obj_localization = obj_localization[::2]            # (1, 1, 196)
 
-            posi_img_data = video_org                            # [1, 3, 224, 224]
+#             posi_img_data = video_org                            # [1, 3, 224, 224]
 
-            obj_len = obj_localization.shape[0]
-            print("obj_len: ", obj_len)
-            for j in range(obj_len):
-                print("obj: ", obj_localization.shape)
-                map = obj_localization[j, :, :].squeeze()
+#             obj_len = obj_localization.shape[0]
+#             print("obj_len: ", obj_len)
+#             for j in range(obj_len):
+#                 print("obj: ", obj_localization.shape)
+#                 map = obj_localization[j, :, :].squeeze()
 
-                print("map: ", map.shape)
-                map = (map-map.min()) / (map.max()-map.min())
-                map=cv2.resize(map.reshape(14,14),(224,224))
-                map=map/map.max()
-                map=np.uint8(map*255)
-                heatmap = cv2.applyColorMap(map, cv2.COLORMAP_JET)
+#                 print("map: ", map.shape)
+#                 map = (map-map.min()) / (map.max()-map.min())
+#                 map=cv2.resize(map.reshape(14,14),(224,224))
+#                 map=map/map.max()
+#                 map=np.uint8(map*255)
+#                 heatmap = cv2.applyColorMap(map, cv2.COLORMAP_JET)
 
-                print("map type: ", type(map))
+#                 print("map type: ", type(map))
 
-                current_img = posi_img_data[j].cpu().numpy()
-                print("current_img type: ", type(current_img))
-                current_img = cv2.resize(current_img, (224, 224))
-                print("current_img: ", current_img.shape)
+#                 current_img = posi_img_data[j].cpu().numpy()
+#                 print("current_img type: ", type(current_img))
+#                 current_img = cv2.resize(current_img, (224, 224))
+#                 print("current_img: ", current_img.shape)
 
-                result = heatmap * 0.4 + current_img * 0.6
+#                 result = heatmap * 0.4 + current_img * 0.6
  
-                file_name = '%04d_' % batch_idx + '%04d_0' % j + '.jpg'
-                print("file_name: ", file_name)
-                if not os.path.exists('net_grd_avst/models_grd_vis/vis_h4_c6'):
-                    os.makedirs('net_grd_avst/models_grd_vis/vis_h4_c6', exist_ok=True)
-                cv2.imwrite(os.path.join('net_grd_avst/models_grd_vis/vis_h4_c6', file_name), result)
+#                 file_name = '%04d_' % batch_idx + '%04d_0' % j + '.jpg'
+#                 print("file_name: ", file_name)
+#                 if not os.path.exists('net_grd_avst/models_grd_vis/vis_h4_c6'):
+#                     os.makedirs('net_grd_avst/models_grd_vis/vis_h4_c6', exist_ok=True)
+#                 cv2.imwrite(os.path.join('net_grd_avst/models_grd_vis/vis_h4_c6', file_name), result)
                 
 
 def main():
@@ -268,13 +268,13 @@ def main():
     parser.add_argument(
         "--label_train", type=str, default="./data/json/avqa-train-updated.json", help="train csv file")
     parser.add_argument(
-        "--label_val", type=str, default="./data/json/avqa-val.json", help="val csv file")
+        "--label_val", type=str, default="./data/json/avqa-test.json", help="val csv file")
     parser.add_argument(
-        "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
+        "--label_test", type=str, default="./data/json/avqa-val.json", help="test csv file")
     parser.add_argument(
         "--label_visualization", type=str, default="./data/json/avqa-val_real.json", help="visualization csv file")
     parser.add_argument(
-        '--batch-size', type=int, default=16, metavar='N', help='input batch size for training (default: 16)')
+        '--batch-size', type=int, default=8, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
         '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
@@ -290,7 +290,7 @@ def main():
     parser.add_argument(
         "--model_save_dir", type=str, default='net_grd_avst/avst_models/', help="model save dir")
     parser.add_argument(
-        "--checkpoint", type=str, default='avst', help="save model name")
+        "--checkpoint", type=str, default='avst_73.06', help="save model name")
     parser.add_argument(
         '--gpu', type=str, default='1', help='gpu device number')
 
@@ -299,6 +299,14 @@ def main():
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    random.seed(args.seed)
+    
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.enabled = True
 
     if args.model == 'AVQA_Fusion_Net':
         model = AVQA_Fusion_Net()
@@ -341,7 +349,7 @@ def main():
         # ===================================== load pretrained model ===============================================
 
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=16, gamma=0.1)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=16, gamma=0.3)
         criterion = nn.CrossEntropyLoss()
         best_acc = 0
         for epoch in range(1, args.epochs + 1):
@@ -354,25 +362,25 @@ def main():
                 torch.save(model.state_dict(), args.model_save_dir + args.checkpoint + ".pt")
                 logging.info(f"Checkpoint epoch {epoch} acc {acc} has been saved.")
                 
-    elif args.mode == "visualize":
-        val_dataset = AVQADatasetVis(label_data=args.label_visualization, audio_dir=args.audio_dir, video_dir=args.video_res14x14_dir)
-        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True)
+    # elif args.mode == "visualize":
+    #     val_dataset = AVQADatasetVis(label_data=args.label_visualization, audio_dir=args.audio_dir, video_dir=args.video_res14x14_dir)
+    #     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True)
 
 
-        # ===================================== load pretrained model ===============================================
-        logging.info("\n-------------- loading pretrained models --------------")
+    #     # ===================================== load pretrained model ===============================================
+    #     logging.info("\n-------------- loading pretrained models --------------")
         
-        pretrained_file = "net_grd_avst/avst_models/avst.pt"
-        checkpoint = torch.load(pretrained_file)
+    #     pretrained_file = "net_grd_avst/avst_models/avst.pt"
+    #     checkpoint = torch.load(pretrained_file)
         
-        model.load_state_dict(checkpoint)
-        model.eval() 
+    #     model.load_state_dict(checkpoint)
+    #     model.eval() 
 
-        logging.info("\n-------------- load pretrained models --------------")
+    #     logging.info("\n-------------- load pretrained models --------------")
 
-        # ===================================== load pretrained model ===============================================
+    #     # ===================================== load pretrained model ===============================================
 
-        visualize(model, val_loader)
+    #     visualize(model, val_loader)
 
     else:
         test_dataset = AVQA_dataset(label=args.label_test, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,
