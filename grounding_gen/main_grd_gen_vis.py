@@ -99,9 +99,12 @@ def eval(model, val_loader):
 
                 result = heatmap * 0.4 + current_img * 0.6
  
-                file_name = '%04d_' % batch_idx + '%04d_0' % j + '.jpg'
+                file_name = '%04d_' % batch_idx + '%04d_0' % j + f"_{video_id[0]}" + '.jpg'
+                ori_file_name = '%04d_' % batch_idx + '%04d_0' % j + f"_{video_id[0]}" + '_raw.jpg'
                 print("file_name: ", file_name)
                 cv2.imwrite(os.path.join('grounding_gen/models_grd_vis/vis_h4_c6', file_name), result)
+                current_img = cv2.cvtColor(current_img, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(os.path.join('grounding_gen/models_grd_vis/vis_h4_c6', ori_file_name), current_img)
 
 
 

@@ -704,6 +704,21 @@ class ModalityTrans(nn.Module):
         self.blocks = nn.ModuleList(blocks)
 
         self.num_group_token = num_group_tokens
+        
+        self.cross_attn = [
+            CrossAttnBlock(
+                dim=dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                drop=drop,
+                attn_drop=attn_drop,
+                drop_path=drop_path,
+                norm_layer=norm_layer
+            ) for _ in range(1)
+        ]
+        self.cross_attn = nn.ModuleList(self.cross_attn)
 
         # han encoder
         if use_han:
@@ -767,5 +782,10 @@ class ModalityTrans(nn.Module):
         attn_dict = None
         if self.grouping is not None:
             x, attn_dict = self.grouping(x_attn, group_token, return_attn=return_attn)
-
+        
+        x_attn_ori = x_attn
+        for blk in self.cross_attn:
+            x_attn = blk(x_attn, x)
+        x_attn = x_attn + x_attn_ori
+        
         return x, attn_dict, x_attn

@@ -67,6 +67,7 @@ def train(args, model, train_loader, optimizer, criterion, epoch):
         out_match, match_label = batch_organize(out_match_posi, out_match_nega)  
         out_match, match_label = out_match.type(torch.FloatTensor).cuda(), match_label.type(torch.LongTensor).cuda()
 
+        # avgn_loss = avgn_ce_loss + avgn_bce_loss_v + avgn_bce_loss_a
         avgn_loss = avgn_ce_loss + avgn_bce_loss_v + avgn_bce_loss_a
     
         # output.clamp_(min=1e-7, max=1 - 1e-7)
@@ -270,11 +271,11 @@ def main():
     parser.add_argument(
         "--label_val", type=str, default="./data/json/avqa-test.json", help="val csv file")
     parser.add_argument(
-        "--label_test", type=str, default="./data/json/avqa-val.json", help="test csv file")
+        "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
     parser.add_argument(
         "--label_visualization", type=str, default="./data/json/avqa-val_real.json", help="visualization csv file")
     parser.add_argument(
-        '--batch-size', type=int, default=8, metavar='N', help='input batch size for training (default: 16)')
+        '--batch-size', type=int, default=16, metavar='N', help='input batch size for training (default: 16)')
     parser.add_argument(
         '--epochs', type=int, default=80, metavar='N', help='number of epochs to train (default: 60)')
     parser.add_argument(
@@ -290,23 +291,23 @@ def main():
     parser.add_argument(
         "--model_save_dir", type=str, default='net_grd_avst/avst_models/', help="model save dir")
     parser.add_argument(
-        "--checkpoint", type=str, default='avst_73.06', help="save model name")
+        "--checkpoint", type=str, default='avst', help="save model name")
     parser.add_argument(
-        '--gpu', type=str, default='1', help='gpu device number')
+        '--gpu', type=str, default='2', help='gpu device number')
 
 
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    random.seed(args.seed)
+    # np.random.seed(args.seed)
+    # torch.manual_seed(args.seed)
+    # torch.cuda.manual_seed_all(args.seed)
+    # random.seed(args.seed)
     
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.enabled = True
+    # torch.backends.cudnn.benchmark = False
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.enabled = True
 
     if args.model == 'AVQA_Fusion_Net':
         model = AVQA_Fusion_Net()
@@ -323,6 +324,11 @@ def main():
         val_dataset = AVQA_dataset(label=args.label_val, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,
                                     transform=transforms.Compose([ToTensor()]), mode_flag='val')
         val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=True)
+        
+        logging.info("Train Dataset", len(train_dataset))
+        logging.info("Val Dataset", len(val_dataset))
+        
+        time.sleep(1)
 
 
         # ===================================== load pretrained model ===============================================
@@ -359,8 +365,9 @@ def main():
             acc = eval(model, val_loader, epoch)
             if acc >= best_acc:
                 best_acc = acc
-                torch.save(model.state_dict(), args.model_save_dir + args.checkpoint + ".pt")
-                logging.info(f"Checkpoint epoch {epoch} acc {acc} has been saved.")
+                model_name: str = args.model_save_dir + args.checkpoint + f"_{TIMESTAMP.replace('/', '-')}std.pt"
+                torch.save(model.state_dict(), model_name)
+                logging.info(f"Checkpoint epoch {epoch} acc {acc} has been saved, file name: {model_name}.")
                 
     # elif args.mode == "visualize":
     #     val_dataset = AVQADatasetVis(label_data=args.label_visualization, audio_dir=args.audio_dir, video_dir=args.video_res14x14_dir)

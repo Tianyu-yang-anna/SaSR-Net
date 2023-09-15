@@ -1,1 +1,1 @@
-~/anaconda3/bin/python net_grd_avst/main_avst.py --mode test --audio_dir "./data/feats/vggish" --video_res14x14_dir "./data/feats/res18_14x14"
+~/anaconda3/bin/python net_grd_avst/main_avst.py --mode test --audio_dir "./data/feats/vggish" --video_res14x14_dir "./data/feats/res18_14x14" --checkpoint avst_2023-09-09-17-53-37-std
