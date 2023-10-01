@@ -8,6 +8,17 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 class Mlp(nn.Module):
 
+    """
+    Multi-Layer Perceptron (MLP) module.
+
+    Args:
+        in_features (int): Number of input features.
+        hidden_features (int, optional): Number of hidden features. Defaults to None (same as in_features).
+        out_features (int, optional): Number of output features. Defaults to None (same as in_features).
+        act_layer (nn.Module, optional): Activation function layer. Defaults to nn.GELU.
+        drop (float, optional): Dropout probability. Defaults to 0.0.
+    """
+
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
         out_features = out_features or in_features
@@ -28,6 +39,17 @@ class Mlp(nn.Module):
 
 class MixerMlp(Mlp):
 
+    """
+    MixerMLP module, which inherits from the Mlp class and performs a specific operation on the input.
+
+    Args:
+        in_features (int): Number of input features.
+        hidden_features (int, optional): Number of hidden features. Defaults to None (same as in_features).
+        out_features (int, optional): Number of output features. Defaults to None (same as in_features).
+        act_layer (nn.Module, optional): Activation function layer. Defaults to nn.GELU.
+        drop (float, optional): Dropout probability. Defaults to 0.0.
+    """
+
     def forward(self, x):
         return super().forward(x.transpose(1, 2)).transpose(1, 2)
 
@@ -36,7 +58,8 @@ def hard_softmax(logits, dim):
     y_soft = logits.softmax(dim)
     # Straight through.
     index = y_soft.max(dim, keepdim=True)[1]
-    y_hard = torch.zeros_like(logits, memory_format=torch.legacy_contiguous_format).scatter_(dim, index, 1.0)
+    y_hard = torch.zeros_like(
+        logits, memory_format=torch.legacy_contiguous_format).scatter_(dim, index, 1.0)
     ret = y_hard - y_soft.detach() + y_soft
 
     return ret
@@ -59,7 +82,8 @@ def gumbel_softmax(logits: torch.Tensor, tau: float = 1, hard: bool = False, dim
     if hard:
         # Straight through.
         index = y_soft.max(dim, keepdim=True)[1]
-        y_hard = torch.zeros_like(logits, memory_format=torch.legacy_contiguous_format).scatter_(dim, index, 1.0)
+        y_hard = torch.zeros_like(
+            logits, memory_format=torch.legacy_contiguous_format).scatter_(dim, index, 1.0)
         ret = y_hard - y_soft.detach() + y_soft
     else:
         # Reparametrization trick.
@@ -108,7 +132,8 @@ class AssignAttention(nn.Module):
 
         attn_dim = -2
         if gumbel and self.training:
-            attn = gumbel_softmax(attn, dim=attn_dim, hard=hard, tau=self.gumbel_tau)
+            attn = gumbel_softmax(attn, dim=attn_dim,
+                                  hard=hard, tau=self.gumbel_tau)
         else:
             if hard:
                 attn = hard_softmax(attn, dim=attn_dim)
@@ -125,11 +150,14 @@ class AssignAttention(nn.Module):
             value = key
         S = key.size(1)
         # [B, nh, N, C//nh]
-        q = rearrange(self.q_proj(query), 'b n (h c)-> b h n c', h=self.num_heads, b=B, n=N, c=C // self.num_heads)
+        q = rearrange(self.q_proj(query), 'b n (h c)-> b h n c',
+                      h=self.num_heads, b=B, n=N, c=C // self.num_heads)
         # [B, nh, S, C//nh]
-        k = rearrange(self.k_proj(key), 'b n (h c)-> b h n c', h=self.num_heads, b=B, c=C // self.num_heads)
+        k = rearrange(self.k_proj(key), 'b n (h c)-> b h n c',
+                      h=self.num_heads, b=B, c=C // self.num_heads)
         # [B, nh, S, C//nh]
-        v = rearrange(self.v_proj(value), 'b n (h c)-> b h n c', h=self.num_heads, b=B, c=C // self.num_heads)
+        v = rearrange(self.v_proj(value), 'b n (h c)-> b h n c',
+                      h=self.num_heads, b=B, c=C // self.num_heads)
 
         # [B, nh, N, S]
         raw_attn = (q @ k.transpose(-2, -1)) * self.scale
@@ -149,7 +177,8 @@ class AssignAttention(nn.Module):
         assert attn.shape == (B, self.num_heads, N, S)
 
         # [B, nh, N, C//nh] <- [B, nh, N, S] @ [B, nh, S, C//nh]
-        out = rearrange(attn @ v, 'b h n c -> b n (h c)', h=self.num_heads, b=B, n=N, c=C // self.num_heads)
+        out = rearrange(attn @ v, 'b h n c -> b n (h c)',
+                        h=self.num_heads, b=B, n=N, c=C // self.num_heads)
 
         out = self.proj(out)
         out = self.proj_drop(out)
@@ -223,7 +252,8 @@ class GroupingBlock(nn.Module):
         self.norm_new_x = norm_layer(dim)
         self.mlp_channels = Mlp(dim, channels_dim, out_dim)
         if out_dim is not None and dim != out_dim:
-            self.reduction = nn.Sequential(norm_layer(dim), nn.Linear(dim, out_dim, bias=False))
+            self.reduction = nn.Sequential(norm_layer(
+                dim), nn.Linear(dim, out_dim, bias=False))
         else:
             self.reduction = nn.Identity()
 
@@ -245,7 +275,8 @@ class GroupingBlock(nn.Module):
             projected_group_tokens (torch.Tensor): [B, S_2, C]
         """
         # [B, S_2, C] <- [B, S_1, C]
-        projected_group_tokens = self.mlp_inter(group_tokens.transpose(1, 2)).transpose(1, 2)
+        projected_group_tokens = self.mlp_inter(
+            group_tokens.transpose(1, 2)).transpose(1, 2)
         projected_group_tokens = self.norm_post_tokens(projected_group_tokens)
         return projected_group_tokens
 
@@ -264,11 +295,14 @@ class GroupingBlock(nn.Module):
         x = self.norm_x(x)
         # [B, S_2, C]
         projected_group_tokens = self.project_group_token(group_tokens)
-        projected_group_tokens = self.pre_assign_attn(projected_group_tokens, x)
-        new_x, attn_dict = self.assign(projected_group_tokens, x, return_attn=return_attn)
+        projected_group_tokens = self.pre_assign_attn(
+            projected_group_tokens, x)
+        new_x, attn_dict = self.assign(
+            projected_group_tokens, x, return_attn=return_attn)
         new_x += projected_group_tokens
 
-        new_x = self.reduction(new_x) + self.mlp_channels(self.norm_new_x(new_x))
+        new_x = self.reduction(
+            new_x) + self.mlp_channels(self.norm_new_x(new_x))
 
         return new_x, attn_dict
 
@@ -333,7 +367,8 @@ class GroupingBlock_Han(nn.Module):
         self.norm_new_x = norm_layer(dim)
         self.mlp_channels = Mlp(dim, channels_dim, out_dim)
         if out_dim is not None and dim != out_dim:
-            self.reduction = nn.Sequential(norm_layer(dim), nn.Linear(dim, out_dim, bias=False))
+            self.reduction = nn.Sequential(norm_layer(
+                dim), nn.Linear(dim, out_dim, bias=False))
         else:
             self.reduction = nn.Identity()
 
@@ -355,7 +390,8 @@ class GroupingBlock_Han(nn.Module):
             projected_group_tokens (torch.Tensor): [B, S_2, C]
         """
         # [B, S_2, C] <- [B, S_1, C]
-        projected_group_tokens = self.mlp_inter(group_tokens.transpose(1, 2)).transpose(1, 2)
+        projected_group_tokens = self.mlp_inter(
+            group_tokens.transpose(1, 2)).transpose(1, 2)
         projected_group_tokens = self.norm_post_tokens(projected_group_tokens)
         return projected_group_tokens
 
@@ -374,11 +410,14 @@ class GroupingBlock_Han(nn.Module):
         x = self.norm_x(x)
         # [B, S_2, C]
         projected_group_tokens = self.project_group_token(group_tokens)
-        projected_group_tokens = self.pre_assign_attn(projected_group_tokens, x)
-        new_x, attn_dict = self.assign(projected_group_tokens, x, return_attn=return_attn)
+        projected_group_tokens = self.pre_assign_attn(
+            projected_group_tokens, x)
+        new_x, attn_dict = self.assign(
+            projected_group_tokens, x, return_attn=return_attn)
         new_x += projected_group_tokens
 
-        new_x = self.reduction(new_x) + self.mlp_channels(self.norm_new_x(new_x))
+        new_x = self.reduction(
+            new_x) + self.mlp_channels(self.norm_new_x(new_x))
 
         return new_x, attn_dict
 
@@ -425,9 +464,11 @@ class Attention(nn.Module):
             B, N, C = x.shape
             S = N
             # [3, B, nh, N, C//nh]
-            qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
+                                      C // self.num_heads).permute(2, 0, 3, 1, 4)
             # [B, nh, N, C//nh]
-            q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
+            # make torchscript happy (cannot use tensor as tuple)
+            q, k, v = qkv[0], qkv[1], qkv[2]
         else:
             B, N, C = query.shape
             if key is None:
@@ -436,11 +477,14 @@ class Attention(nn.Module):
                 value = key
             S = key.size(1)
             # [B, nh, N, C//nh]
-            q = rearrange(self.q_proj(query), 'b n (h c)-> b h n c', h=self.num_heads, b=B, n=N, c=C // self.num_heads)
+            q = rearrange(self.q_proj(query), 'b n (h c)-> b h n c',
+                          h=self.num_heads, b=B, n=N, c=C // self.num_heads)
             # [B, nh, S, C//nh]
-            k = rearrange(self.k_proj(key), 'b n (h c)-> b h n c', h=self.num_heads, b=B, c=C // self.num_heads)
+            k = rearrange(self.k_proj(key), 'b n (h c)-> b h n c',
+                          h=self.num_heads, b=B, c=C // self.num_heads)
             # [B, nh, S, C//nh]
-            v = rearrange(self.v_proj(value), 'b n (h c)-> b h n c', h=self.num_heads, b=B, c=C // self.num_heads)
+            v = rearrange(self.v_proj(value), 'b n (h c)-> b h n c',
+                          h=self.num_heads, b=B, c=C // self.num_heads)
 
         # [B, nh, N, S]
         attn = (q @ k.transpose(-2, -1)) * self.scale
@@ -454,7 +498,8 @@ class Attention(nn.Module):
 
         # [B, nh, N, C//nh] -> [B, N, C]
         # out = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        out = rearrange(attn @ v, 'b h n c -> b n (h c)', h=self.num_heads, b=B, n=N, c=C // self.num_heads)
+        out = rearrange(attn @ v, 'b h n c -> b n (h c)',
+                        h=self.num_heads, b=B, n=N, c=C // self.num_heads)
         out = self.proj(out)
         out = self.proj_drop(out)
         return out
@@ -485,14 +530,17 @@ class CrossAttnBlock(nn.Module):
             self.norm_post = nn.Identity()
         self.attn = Attention(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,
+                       act_layer=act_layer, drop=drop)
 
     def forward(self, query, key, *, mask=None):
         x = query
-        x = x + self.drop_path(self.attn(self.norm_q(query), self.norm_k(key), mask=mask))
+        x = x + self.drop_path(self.attn(self.norm_q(query),
+                               self.norm_k(key), mask=mask))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         x = self.norm_post(x)
         return x
@@ -521,10 +569,12 @@ class AttnBlock(nn.Module):
             attn_drop=attn_drop,
             proj_drop=drop,
             qkv_fuse=True)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,
+                       act_layer=act_layer, drop=drop)
 
     def forward(self, x, mask=None):
         x = x + self.drop_path(self.attn(self.norm1(x), mask=mask))
@@ -579,7 +629,8 @@ class GroupingLayer(nn.Module):
         self.use_checkpoint = use_checkpoint
         self.num_group_token = num_group_token
         if num_group_token > 0:
-            self.group_token = nn.Parameter(torch.zeros(1, num_group_token, dim))
+            self.group_token = nn.Parameter(
+                torch.zeros(1, num_group_token, dim))
             if not zero_init_group_token:
                 trunc_normal_(self.group_token, std=.02)
         else:
@@ -639,7 +690,8 @@ class GroupingLayer(nn.Module):
         if self.with_group_token:
             group_token = self.group_token.expand(x.size(0), -1, -1)
             if self.group_projector is not None:
-                group_token = group_token + self.group_projector(prev_group_token)
+                group_token = group_token + \
+                    self.group_projector(prev_group_token)
         else:
             group_token = None
 
@@ -655,7 +707,8 @@ class GroupingLayer(nn.Module):
 
         attn_dict = None
         if self.downsample is not None:
-            x, attn_dict = self.downsample(x, group_token, return_attn=return_attn)
+            x, attn_dict = self.downsample(
+                x, group_token, return_attn=return_attn)
 
         return x, group_token, attn_dict
 
@@ -663,24 +716,24 @@ class GroupingLayer(nn.Module):
 class ModalityTrans(nn.Module):
 
     def __init__(self,
-                dim,
-                depth=3,
-                num_heads=6,
-                mlp_ratio=4.,
-                qkv_bias=True,
-                qk_scale=None,
-                drop=0.,
-                attn_drop=0.,
-                drop_path=0.,
-                norm_layer=nn.LayerNorm,
-                out_dim_grouping=256,
-                num_heads_grouping=6,
-                num_group_tokens=10+25,
-                num_output_groups=25,
-                hard_assignment=True,
-                use_han=True,
-                use_grouping=True
-                ):
+                 dim,
+                 depth=3,
+                 num_heads=6,
+                 mlp_ratio=4.,
+                 qkv_bias=True,
+                 qk_scale=None,
+                 drop=0.,
+                 attn_drop=0.,
+                 drop_path=0.,
+                 norm_layer=nn.LayerNorm,
+                 out_dim_grouping=256,
+                 num_heads_grouping=6,
+                 num_group_tokens=10+25,
+                 num_output_groups=25,
+                 hard_assignment=True,
+                 use_han=True,
+                 use_grouping=True
+                 ):
 
         super(ModalityTrans, self).__init__()
 
@@ -699,12 +752,12 @@ class ModalityTrans(nn.Module):
                     attn_drop=attn_drop,
                     drop_path=drop_path,
                     norm_layer=norm_layer)
-                )
+            )
 
         self.blocks = nn.ModuleList(blocks)
 
         self.num_group_token = num_group_tokens
-        
+
         self.cross_attn = [
             CrossAttnBlock(
                 dim=dim,
@@ -723,30 +776,30 @@ class ModalityTrans(nn.Module):
         # han encoder
         if use_han:
             self.han_encoder = GroupingBlock_Han(
-                    dim=dim,
-                    out_dim=out_dim_grouping,
-                    num_heads=8,
-                    num_group_token=10,
-                    num_output_group=10,
-                    norm_layer=norm_layer,
-                    hard=not hard_assignment,
-                    gumbel=not hard_assignment
-                )
+                dim=dim,
+                out_dim=out_dim_grouping,
+                num_heads=8,
+                num_group_token=10,
+                num_output_group=10,
+                norm_layer=norm_layer,
+                hard=not hard_assignment,
+                gumbel=not hard_assignment
+            )
         else:
             self.han_encoder = None
 
         # grouping block
         if use_grouping:
             self.grouping = GroupingBlock(
-                            dim=dim,
-                            out_dim=out_dim_grouping,
-                            num_heads=num_heads_grouping,
-                            num_group_token=num_group_tokens,
-                            num_output_group=num_output_groups,
-                            norm_layer=norm_layer,
-                            hard=hard_assignment,
-                            gumbel=hard_assignment
-                        )
+                dim=dim,
+                out_dim=out_dim_grouping,
+                num_heads=num_heads_grouping,
+                num_group_token=num_group_tokens,
+                num_output_group=num_output_groups,
+                norm_layer=norm_layer,
+                hard=hard_assignment,
+                gumbel=hard_assignment
+            )
         else:
             self.grouping = None
 
@@ -781,11 +834,12 @@ class ModalityTrans(nn.Module):
 
         attn_dict = None
         if self.grouping is not None:
-            x, attn_dict = self.grouping(x_attn, group_token, return_attn=return_attn)
-        
+            x, attn_dict = self.grouping(
+                x_attn, group_token, return_attn=return_attn)
+
         x_attn_ori = x_attn
         for blk in self.cross_attn:
             x_attn = blk(x_attn, x)
         x_attn = x_attn + x_attn_ori
-        
+
         return x, attn_dict, x_attn
