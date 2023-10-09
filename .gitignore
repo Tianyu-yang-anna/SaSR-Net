@@ -203,3 +203,6 @@ grounding_vis/
 
 # Scripts 
 scripts/
+
+# MacOS Meta Files
+.DS_Store
