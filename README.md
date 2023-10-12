@@ -6,8 +6,6 @@ Implementation for our paper:
 
 [Tianyu Yang](https://github.com/tianyu-yang1998), [Yiyang Nan](www.google.com), [Yapeng Tian](https://yapengtian.org/), [Xiangliang Zhang](www.google.com)
 
-**Resources:**  [[Paper]](https://gewu-lab.github.io/MUSIC-AVQA/static/files/MUSIC-AVQA.pdf)
-
 ## Usage
 
 ### Set up Environment
