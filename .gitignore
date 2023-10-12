@@ -181,6 +181,7 @@ data/
 log/
 *.log
 *.txt
+!requirements.txt
 
 # Pretrained models and Saved models
 *.pt 
