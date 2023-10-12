@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from dataloader import *
-from models import AVQA_Fusion_Net
+from models import SaSR_Net
 import ast
 import json
 import numpy as np
@@ -81,6 +81,7 @@ def train(args, model, train_loader, optimizer, epoch):
             logging.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(audio), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
+        break
 
 
 def eval(model, val_loader, epoch):
@@ -202,7 +203,7 @@ def main():
     parser.add_argument(
         "--label_train", type=str, default="./data/json/avqa-train-updated.json", help="train csv file")
     parser.add_argument(
-        "--label_val", type=str, default="./data/json/avqa-test.json", help="val csv file")
+        "--label_val", type=str, default="./data/json/avqa-val.json", help="val csv file")
     parser.add_argument(
         "--label_test", type=str, default="./data/json/avqa-test.json", help="test csv file")
     parser.add_argument(
@@ -214,7 +215,7 @@ def main():
     parser.add_argument(
         "--lr", type=float, default=1e-4, metavar="LR", help="learning rate (default: 3e-4)")
     parser.add_argument(
-        "--model", type=str, default="AVQA_Fusion_Net", help="with model to use")
+        "--model", type=str, default="sasr_net", help="with model to use")
     parser.add_argument(
         "--mode", type=str, default="train", help="with mode to use")
     parser.add_argument(
@@ -222,13 +223,13 @@ def main():
     parser.add_argument(
         "--log-interval", type=int, default=50, metavar="N", help="how many batches to wait before logging training status")
     parser.add_argument(
-        "--model_save_dir", type=str, default="net_grd_avst/avst_models/", help="model save dir")
+        "--model_save_dir", type=str, default="checkpoints/sasr_net/", help="model save dir")
     parser.add_argument(
-        "--checkpoint", type=str, default="avst", help="save model name")
+        "--checkpoint", type=str, default="sasr_net", help="save model name")
     parser.add_argument(
         "--gpu", type=str, default="0", help="gpu device number")
     parser.add_argument(
-        "--pretrained_path", type=str, default="", help="pretrained model that will be used"
+        "--pretrained_path", type=str, default="./pretrained/avst.pt", help="pretrained model that will be used"
     )
 
     args = parser.parse_args()
@@ -240,13 +241,16 @@ def main():
     torch.cuda.manual_seed_all(args.seed)
     random.seed(args.seed)
 
-    if args.model == 'AVQA_Fusion_Net':
-        model = AVQA_Fusion_Net()
+    if args.model == 'sasr_net':
+        model = SaSR_Net()
         model = model.to('cuda')
         # model = nn.DataParallel(model)
     else:
         raise ('not recognized')
-
+    
+    if not os.path.exists(args.model_save_dir):
+        os.makedirs(args.model_save_dir)
+        
     if args.mode == 'train':
         train_dataset = SaSRDataset(label=args.label_train, audio_dir=args.audio_dir, video_res14x14_dir=args.video_res14x14_dir,
                                     transform=transforms.Compose([ToTensor()]), mode_flag='train')
@@ -263,11 +267,13 @@ def main():
         # ===================================== load pretrained model ===============================================
         # concat model
         pretrained_path = args.pretrained_path
-        if pretrained_path:
+        if pretrained_path and os.path.exists(pretrained_path):
             try:
                 checkpoint = torch.load(pretrained_path)
             except:
                 checkpoint = {} 
+        else:
+            checkpoint = {}
         logging.info(
             "\n-------------- loading pretrained models --------------")
         model_dict = model.state_dict()
@@ -295,8 +301,7 @@ def main():
             acc = eval(model, val_loader, epoch)
             if acc >= best_acc:
                 best_acc = acc
-                model_name: str = args.model_save_dir + args.checkpoint + \
-                    f"_{TIMESTAMP.replace('/', '-')}std.pt"
+                model_name: str = os.path.join(args.model_save_dir, args.checkpoint + f"_{TIMESTAMP.replace('/', '-')}std.pt")
                 torch.save(model.state_dict(), model_name)
                 logging.info(
                     f"Checkpoint epoch {epoch} acc {acc} has been saved, file name: {model_name}.")
@@ -308,7 +313,7 @@ def main():
         test_loader = DataLoader(
             test_dataset, batch_size=1, shuffle=False, num_workers=4, pin_memory=True)
         model.load_state_dict(torch.load(
-            args.model_save_dir + args.checkpoint + ".pt"))
+            os.path.join(args.model_save_dir, args.checkpoint + ".pt")))
         test(model, test_loader)
 
 

@@ -43,7 +43,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 
-# Translations
+# Translation
 *.mo
 *.pot
 
@@ -172,19 +172,19 @@ $RECYCLE.BIN/
 # Jupyter Notebook
 .ipynb_checkpoints/
 
-# Data folder 
+# Dataset folder 
 data/
+!data/json 
+!data/json_update
 
 # Log files 
 log/
 *.log
 *.txt
 
-# Pretrained models
-pretrained/
-
-# Saved models
+# Pretrained models and Saved models
 *.pt 
+!main_grounding_gen_best.pt
 
 # Program records / analysis 
 runs/
@@ -197,9 +197,6 @@ runs/
 
 # Deprecated 
 deprecated/
-
-# Vis gen 
-grounding_vis/
 
 # Scripts 
 scripts/

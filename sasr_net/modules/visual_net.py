@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+import os 
+
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -219,7 +221,10 @@ def _resnet(arch, block, layers, pretrained, progress, modal, **kwargs):
     model = ResNet(block, layers, modal, **kwargs)
     if pretrained:
         print('---------- >>> load pretrained res-18 <<< ----------\n')
-        model.load_state_dict(torch.load("pretrained/resnet18-5c106cde.pth"), strict=False)
+        if os.path.exists("./pretrained/resnet18-5c106cde.pth"):
+            model.load_state_dict(torch.load("./pretrained/resnet18-5c106cde.pth"), strict=False)
+        else:
+            print('---------- >>> fail to load pretrained res-18 <<< ----------\n')
     return model
 
 def resnet18(pretrained=False, progress=True, modal='vision',**kwargs):

@@ -58,7 +58,7 @@ class SaSRDataset(Dataset):
   
         self.train: bool = mode_flag == "train"
         
-        samples = json.load(open('../MGNAVQA-copy/data/json/avqa-train.json', 'r'))
+        samples = json.load(open('./data/json/avqa-train.json', 'r'))
 
         # nax =  nne
         ques_vocab = ['<pad>']
