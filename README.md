@@ -1,4 +1,4 @@
-# AUDIO-VISUAL QUESTION ANSWERING WITH SEMANTIC GUIDANCE
+# Audio-Visual Question Answering With Semantic Guidance - Source-aware Semantic Representation Network (SaSR-Net)
 
 Implementation for our paper:
 
